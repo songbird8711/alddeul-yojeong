@@ -1,0 +1,477 @@
+:root {
+  --paper: #EDEAE1;
+  --paper-alt: #E4E0D4;
+  --ink: #1C1B1A;
+  --ink-soft: #55524A;
+  --cheap-green: #1E7F4C;
+  --high-red: #B23A2E;
+  --highlight: #F2C744;
+  --line: #C9C4B4;
+
+  --font-display: 'Pretendard', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+}
+
+/* 은은한 종이 질감 */
+body {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(0,0,0,0.015) 0, transparent 40%),
+    radial-gradient(circle at 80% 60%, rgba(0,0,0,0.02) 0, transparent 45%);
+}
+
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
+}
+
+.brand {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.stamp-logo {
+  color: var(--cheap-green);
+  display: inline-flex;
+  padding: 8px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  transform: rotate(-6deg);
+}
+.brand h1 {
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  margin: 10px 0 4px;
+}
+.tagline {
+  color: var(--ink-soft);
+  font-size: 14px;
+  margin: 0;
+}
+
+.products {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+@media (max-width: 480px) {
+  .products { grid-template-columns: 1fr; }
+}
+
+.tag-card {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px 14px 4px 4px;
+  padding: 18px 16px 16px;
+  box-shadow: 2px 3px 0 rgba(28,27,26,0.06);
+}
+.tag-hole {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.tag-card h2 {
+  font-size: 15px;
+  margin: 0 0 12px 20px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+.field-row {
+  display: flex;
+  gap: 8px;
+}
+.field-row .field { flex: 1; }
+.unit-field { max-width: 110px; }
+
+input[type=number], select {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+input[type=number]:focus, select:focus {
+  outline: 2px solid var(--cheap-green);
+  outline-offset: 1px;
+}
+
+.discount-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.mini-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  flex: 1;
+  min-width: 90px;
+}
+.mini-field.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.mini-field input[type=checkbox] {
+  width: 16px; height: 16px;
+}
+
+.live-price {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+.live-price.live-error {
+  color: var(--ink-soft);
+  font-weight: 400;
+  font-size: 13px;
+}
+
+.stamp-button {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ink);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.stamp-button:hover { background: #000; }
+.stamp-button:active { transform: translateY(1px); }
+
+.hidden { display: none; }
+
+.receipt {
+  background: #fff;
+  margin: 20px 0;
+  padding: 18px 18px 24px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  clip-path: polygon(
+    0% 0%, 100% 0%, 100% 96%,
+    95% 100%, 90% 96%, 85% 100%, 80% 96%, 75% 100%, 70% 96%,
+    65% 100%, 60% 96%, 55% 100%, 50% 96%, 45% 100%, 40% 96%,
+    35% 100%, 30% 96%, 25% 100%, 20% 96%, 15% 100%, 10% 96%,
+    5% 100%, 0% 96%
+  );
+  box-shadow: 2px 4px 10px rgba(28,27,26,0.08);
+}
+.receipt-head {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.receipt-divider {
+  border-top: 1px dashed var(--line);
+  margin: 8px 0;
+}
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.receipt-row.win { color: var(--cheap-green); font-weight: 700; }
+.receipt-note {
+  font-size: 11px;
+  color: var(--ink-soft);
+  padding-left: 4px;
+}
+.stamp {
+  display: inline-block;
+  border: 2px solid var(--cheap-green);
+  color: var(--cheap-green);
+  border-radius: 4px;
+  padding: 0 4px;
+  transform: rotate(-8deg);
+  font-size: 11px;
+  margin-left: 4px;
+}
+.receipt-summary {
+  text-align: center;
+  font-weight: 700;
+  margin-top: 8px;
+}
+.receipt-error {
+  color: var(--high-red);
+  font-weight: 600;
+  text-align: center;
+}
+.receipt-warning {
+  color: var(--high-red);
+  background: #FBEAE7;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.history { margin-top: 30px; }
+.history h2 {
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.history-limit { font-weight: 400; font-size: 11px; }
+#historyList { list-style: none; padding: 0; margin: 10px 0 0; }
+.history-item {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.history-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.history-date { color: var(--ink-soft); font-size: 11px; margin-top: 2px; }
+.history-delete {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+}
+.history-delete:hover { color: var(--high-red); }
+.history-empty { color: var(--ink-soft); font-size: 13px; }
+
+.app-footer {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 11px;
+  margin-top: 40px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ---- 사진 OCR 입력 UI ---- */
+.photo-block { margin-bottom: 12px; }
+.photo-btn {
+  width: 100%;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1.5px dashed var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.photo-btn:hover { border-color: var(--cheap-green); color: var(--cheap-green); }
+
+.photo-preview-wrap { margin-top: 10px; }
+.photo-preview {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: block;
+}
+.ocr-status {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 6px;
+  text-align: center;
+}
+.ocr-status.ocr-error { color: var(--high-red); }
+.ocr-status.ocr-done { color: var(--cheap-green); font-weight: 600; }
+
+.ocr-candidates { margin-top: 8px; }
+.ocr-chip-group { margin-bottom: 8px; }
+.ocr-chip-group-label {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.ocr-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ocr-chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ocr-chip:hover, .ocr-chip:active {
+  border-color: var(--cheap-green);
+  background: #EAF6EF;
+  color: var(--cheap-green);
+}
+
+.field-hint {
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+/* ---- 온라인 최저가 확인 ---- */
+.online-check { margin-top: 14px; }
+.online-hint {
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-bottom: 8px;
+}
+.online-btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.online-btn:hover { border-color: var(--cheap-green); color: var(--cheap-green); }
+
+.online-result { margin-bottom: 14px; }
+.online-status {
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 8px;
+}
+.online-status.online-error { color: var(--high-red); }
+
+.online-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.online-item.cheapest { border-color: var(--cheap-green); background: #EAF6EF; }
+.online-item-price {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+}
+.online-item-title {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.online-item-mall {
+  font-size: 11px;
+  color: var(--cheap-green);
+}
+
+/* ---- 상단 툴바 (A/B 바꾸기, 초기화) ---- */
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.toolbar-btn {
+  flex: 1;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.toolbar-btn:hover { color: var(--ink); border-color: var(--ink); }
+
+/* ---- 하단 고정 비교하기 바 ---- */
+.compare-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--paper) 60%, rgba(237,234,225,0));
+  z-index: 10;
+}
+.compare-bar .stamp-button {
+  max-width: 640px;
+  margin: 0 auto;
+  box-shadow: 0 -2px 12px rgba(28,27,26,0.12);
+}
+/* 하단 고정바에 콘텐츠가 가리지 않도록 앱 하단 여백 확보 */
+.app { padding-bottom: 90px; }
+
+/* ---- 공유하기 버튼 ---- */
+.share-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--cheap-green);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.share-btn:active { transform: translateY(1px); }
+.share-status {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+
+.history-item { cursor: pointer; }
+.history-item:hover { border-color: var(--cheap-green); }

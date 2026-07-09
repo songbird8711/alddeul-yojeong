@@ -1,0 +1,16 @@
+{
+  "name": "알뜰요정 - 장보기 단가 비교",
+  "short_name": "알뜰요정",
+  "description": "두 상품의 실질 단가를 비교해 더 알뜰한 소비를 돕는 계산기",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#EDEAE1",
+  "theme_color": "#EDEAE1",
+  "lang": "ko",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

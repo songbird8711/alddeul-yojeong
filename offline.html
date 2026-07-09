@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>알뜰요정 · 오프라인</title>
+<style>
+  body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #EDEAE1;
+    color: #1C1B1A;
+    font-family: -apple-system, sans-serif;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+  .box { max-width: 320px; }
+  h1 { font-size: 20px; margin-bottom: 8px; }
+  p { color: #55524A; font-size: 14px; line-height: 1.5; }
+  button {
+    margin-top: 16px;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 8px;
+    background: #1C1B1A;
+    color: #fff;
+    font-size: 14px;
+  }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h1>🧚 알뜰요정이 인터넷을 못 찾고 있어요</h1>
+    <p>인터넷 연결을 확인한 뒤<br>아래 버튼으로 다시 시도해주세요.</p>
+    <button onclick="location.reload()">다시 시도</button>
+  </div>
+</body>
+</html>
