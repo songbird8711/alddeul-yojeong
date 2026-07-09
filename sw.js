@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v4'; // v3 -> v4: UX 개선(히스토리 복원/임시저장/swap/초기화/공유) 반영
+const CACHE_NAME = 'alddeul-yojeong-v5'; // v4 -> v5: 네비게이션 요청을 네트워크 우선으로 전환 (재실행 시 "연결할 수 없음" 버그 수정)
 const ASSETS = [
   './index.html',
   './style.css',
@@ -29,6 +29,15 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// 캐시에 저장해도 안전한 응답인지 확인.
+// - 정상(200) 응답만 저장한다.
+// - 리다이렉트를 거친 응답(response.redirected === true)은 저장하지 않는다.
+//   (리다이렉트된 응답을 나중에 navigate 요청에 그대로 재사용하면
+//    브라우저가 로드 자체를 실패시켜 "사이트에 연결할 수 없음"이 뜨는 문제가 있었음)
+function isCacheable(response) {
+  return response && response.ok && !response.redirected && response.type !== 'opaqueredirect';
+}
+
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
@@ -38,23 +47,44 @@ self.addEventListener('fetch', (event) => {
     return; // 서비스워커가 가로채지 않음 -> 브라우저 기본 네트워크 요청으로 처리됨
   }
 
+  // ---- 페이지 이동(navigate) 요청: 네트워크 우선, 실패 시에만 캐시 ----
+  // 앱을 껐다 켤 때마다 항상 최신 페이지를 받아오고, 오프라인일 때만 캐시로 대체한다.
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((res) => {
+          if (isCacheable(res)) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+          }
+          return res;
+        })
+        .catch(async () => {
+          const cached = await caches.match('./index.html');
+          if (cached) return cached;
+          const offline = await caches.match('./offline.html');
+          if (offline) return offline;
+          return new Response('오프라인 상태이고 저장된 페이지도 없어요.', { status: 503, statusText: 'Offline' });
+        })
+    );
+    return;
+  }
+
+  // ---- 그 외 정적 자산(js/css/이미지 등): 캐시 우선, 없으면 네트워크 ----
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
 
       return fetch(event.request)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          if (isCacheable(res)) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy)).catch(() => {});
+          }
           return res;
         })
-        .catch(async () => {
+        .catch(() => {
           // 캐시도 없고 네트워크도 실패한 경우: 절대 undefined를 반환하지 않는다.
-          if (event.request.mode === 'navigate') {
-            const offline = await caches.match('./offline.html');
-            if (offline) return offline;
-          }
-          // 그 외 리소스(css/js 등)는 빈 실패 응답이라도 유효한 Response로 반환
           return new Response('', { status: 503, statusText: 'Offline' });
         });
     })
