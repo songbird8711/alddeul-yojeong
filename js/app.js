@@ -232,10 +232,8 @@ document.addEventListener('DOMContentLoaded', () => {
       toggleExchangeRate(p);
       renderDiscountParams(p);
       const currency = els[p].currency.value;
-      if (currency !== 'KRW' && !els[p].exchangeRate.value) {
-        const remembered = (PrefsStore.get().exchangeRates || {})[currency];
-        if (remembered) els[p].exchangeRate.value = remembered;
-      }
+      const remembered = currency !== 'KRW' ? (PrefsStore.get().exchangeRates || {})[currency] : null;
+      els[p].exchangeRate.value = remembered || '';   // 통화 바뀔 때마다 무조건 새로 세팅(없으면 비움)
       liveUpdate(p);
     });
     els[p].discountType.addEventListener('change', () => {
