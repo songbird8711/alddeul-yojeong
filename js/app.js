@@ -560,8 +560,26 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ---- 이번 주 절약 금액 ----
+  const weeklySavingsBox = document.getElementById('weeklySavingsBox');
+  function renderWeeklySavings() {
+    const { total, count } = HistoryStore.getWeeklySavings();
+    if (count === 0) {
+      weeklySavingsBox.classList.add('hidden');
+      weeklySavingsBox.innerHTML = '';
+      return;
+    }
+    weeklySavingsBox.classList.remove('hidden');
+    weeklySavingsBox.innerHTML = `
+      <div class="weekly-savings-label">🧚 이번 주 절약 금액</div>
+      <div class="weekly-savings-amount">${krw(total)}원</div>
+      <div class="weekly-savings-count">최근 7일간 비교 ${count}건 기준</div>
+    `;
+  }
+
   // ---- 히스토리 ----
   function renderHistory() {
+    renderWeeklySavings();
     const list = HistoryStore.getAll();
     if (list.length === 0) {
       historyList.innerHTML = `<li class="history-empty">아직 비교 기록이 없어요.</li>`;
