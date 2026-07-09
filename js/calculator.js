@@ -11,7 +11,10 @@ const Calculator = (() => {
     lb: 453.592,
   };
 
-  const SUPPORTED_CURRENCIES = ['KRW', 'USD', 'CAD', 'GBP', 'EUR', 'JPY'];
+  // 10개국 우선순위(일본→베트남→태국→중국→대만→필리핀→인도네시아→미국→싱가포르→말레이시아) + 기존 통화
+  const SUPPORTED_CURRENCIES = [
+    'KRW', 'JPY', 'VND', 'THB', 'CNY', 'TWD', 'PHP', 'IDR', 'USD', 'SGD', 'MYR', 'CAD', 'GBP', 'EUR',
+  ];
 
   function getCategory(unit) {
     if (Object.prototype.hasOwnProperty.call(WEIGHT_TO_GRAM, unit)) return 'weight';
@@ -26,7 +29,7 @@ const Calculator = (() => {
    * @param {number} input.price   정가 (해당 통화 기준)
    * @param {number} input.amount  1개 기준 용량/수량
    * @param {string} input.unit    'g'|'kg'|'oz'|'lb'|'ml'|'ea'
-   * @param {string} input.currency 'KRW'|'USD'|'CAD'|'GBP'|'EUR'|'JPY'
+   * @param {string} input.currency SUPPORTED_CURRENCIES 중 하나
    * @param {number} input.exchangeRate 1 외화 = ? 원 (KRW면 무시됨)
    * @param {string} input.discountType 'none'|'bundle'|'percent'|'flat'|'card'
    * @param {Object} input.discountParams
