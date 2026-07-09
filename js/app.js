@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', () => {
       currency: document.getElementById(`currency${p}`),
       exchangeRateWrap: document.getElementById(`exchangeRateWrap${p}`),
       exchangeRate: document.getElementById(`exchangeRate${p}`),
+      exrateHint: document.getElementById(`exrateHint${p}`),
       discountType: document.getElementById(`discountType${p}`),
       discountParams: document.getElementById(`discountParams${p}`),
       live: document.getElementById(`live${p}`),
@@ -43,6 +44,29 @@ document.addEventListener('DOMContentLoaded', () => {
   function toggleExchangeRate(p) {
     const isKRW = els[p].currency.value === 'KRW';
     els[p].exchangeRateWrap.classList.toggle('hidden', isKRW);
+    renderExrateHint(p);
+  }
+
+  // ---- 환율이 자동으로 채워졌는지/오프라인 캐시인지 안내 문구 표시 ----
+  function renderExrateHint(p) {
+    if (!els[p].exrateHint) return;
+    const isKRW = els[p].currency.value === 'KRW';
+    if (isKRW) {
+      els[p].exrateHint.textContent = '';
+      els[p].exrateHint.className = 'exrate-hint';
+      return;
+    }
+    const cache = ExchangeRateStore.get();
+    if (ExchangeRateStore.isFresh(cache)) {
+      els[p].exrateHint.textContent = '오늘 환율 자동 적용됨 (필요하면 직접 수정하세요)';
+      els[p].exrateHint.className = 'exrate-hint auto';
+    } else if (cache) {
+      els[p].exrateHint.textContent = `⚠ ${cache.date} 기준 환율이에요 (오프라인이라 갱신 못함, 직접 수정 가능)`;
+      els[p].exrateHint.className = 'exrate-hint stale';
+    } else {
+      els[p].exrateHint.textContent = '';
+      els[p].exrateHint.className = 'exrate-hint';
+    }
   }
 
   // ---- 단위가 '개'일 때만 1개당 무게 입력칸 노출 ----
@@ -244,6 +268,52 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   loadInitialState();
+
+  // ---- 환율 자동 조회 (하루 1회, Frankfurter API, 실패 시 캐시/수동입력으로 자연스럽게 대체) ----
+  async function ensureExchangeRates() {
+    const cache = ExchangeRateStore.get();
+    if (ExchangeRateStore.isFresh(cache)) {
+      applyExchangeRates(cache.rates);
+      return;
+    }
+    try {
+      const res = await fetch('https://api.frankfurter.dev/v1/latest?base=KRW&symbols=USD,CAD,GBP,EUR,JPY');
+      if (!res.ok) throw new Error('환율 응답 실패: ' + res.status);
+      const data = await res.json();
+      const rates = {};
+      Object.entries(data.rates || {}).forEach(([cur, krwPerUnit]) => {
+        const n = Number(krwPerUnit);
+        if (n > 0) rates[cur] = Math.round((1 / n) * 100) / 100; // KRW 기준 응답을 "1외화 = ?원"으로 뒤집음
+      });
+      if (Object.keys(rates).length > 0) {
+        ExchangeRateStore.set(rates);
+        applyExchangeRates(rates);
+      } else if (cache) {
+        applyExchangeRates(cache.rates);
+      }
+    } catch (e) {
+      console.warn('환율 자동 조회 실패, 캐시나 수동 입력으로 대체합니다.', e);
+      if (cache) applyExchangeRates(cache.rates);
+      // 캐시도 전혀 없으면 아무 것도 하지 않고 기존 수동 입력 흐름 그대로 유지
+    }
+  }
+
+  // 조회/캐시된 환율을 "마지막에 쓰던 값"과 동일한 방식으로 저장하고,
+  // 현재 화면에 비어있는 환율 입력칸이 있으면 자동으로 채워준다 (사용자가 입력한 값은 덮어쓰지 않음).
+  function applyExchangeRates(rates) {
+    const prefs = PrefsStore.get();
+    PrefsStore.update({ exchangeRates: { ...(prefs.exchangeRates || {}), ...rates } });
+    products.forEach((p) => {
+      const currency = els[p].currency.value;
+      if (currency !== 'KRW' && !els[p].exchangeRate.value && rates[currency]) {
+        els[p].exchangeRate.value = rates[currency];
+        liveUpdate(p);
+      }
+      renderExrateHint(p);
+    });
+  }
+
+  ensureExchangeRates();
 
   // ---- 입력 중 자동 임시저장 (products 영역 안의 모든 입력 변화를 위임 방식으로 감지) ----
   let draftSaveTimer = null;
