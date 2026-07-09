@@ -33,7 +33,22 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultSection = document.getElementById('result');
   const historyList = document.getElementById('historyList');
 
-  const CURRENCY_SYMBOL = { KRW: '₩', USD: '$', CAD: 'C$', GBP: '£', EUR: '€', JPY: '¥' };
+  const CURRENCY_SYMBOL = {
+    KRW: '₩',
+    JPY: '¥',
+    VND: '₫',
+    THB: '฿',
+    CNY: '¥',
+    TWD: 'NT$',
+    PHP: '₱',
+    IDR: 'Rp',
+    USD: '$',
+    SGD: 'S$',
+    MYR: 'RM',
+    CAD: 'C$',
+    GBP: '£',
+    EUR: '€',
+  };
 
   // 한국 원화는 소수점 없이 표시 (반올림)
   function krw(n) {
@@ -232,8 +247,11 @@ document.addEventListener('DOMContentLoaded', () => {
       toggleExchangeRate(p);
       renderDiscountParams(p);
       const currency = els[p].currency.value;
+      // 버그 수정: 통화가 바뀌면 이전 통화의 환율 값은 더 이상 의미가 없으므로
+      // 필드에 값이 남아있는지 여부와 상관없이 항상 새 통화 기준으로 다시 채운다
+      // (기억된 값이 없으면 비워서 사용자가 직접 입력하도록 한다).
       const remembered = currency !== 'KRW' ? (PrefsStore.get().exchangeRates || {})[currency] : null;
-      els[p].exchangeRate.value = remembered || '';   // 통화 바뀔 때마다 무조건 새로 세팅(없으면 비움)
+      els[p].exchangeRate.value = remembered || '';
       liveUpdate(p);
     });
     els[p].discountType.addEventListener('change', () => {
@@ -267,31 +285,62 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   loadInitialState();
 
-  // ---- 환율 자동 조회 (하루 1회, Frankfurter API, 실패 시 캐시/수동입력으로 자연스럽게 대체) ----
+  // ---- 환율 자동 조회 (하루 1회, 실패 시 캐시/수동입력으로 자연스럽게 대체) ----
+  // 주 소스: Frankfurter(ECB 기준, 31개 통화 지원). VND·TWD는 ECB가 다루지 않는 통화라
+  // 보조 소스(open.er-api.com, 무료·키 불필요)로 별도 조회해서 합친다.
+  // 두 소스는 서로 독립적으로 실패할 수 있으므로 Promise.allSettled로 한쪽이 죽어도
+  // 다른 쪽 결과는 정상적으로 반영되게 한다.
+  async function fetchFrankfurterRates() {
+    const res = await fetch(
+      'https://api.frankfurter.dev/v1/latest?base=KRW&symbols=USD,CAD,GBP,EUR,JPY,CNY,IDR,MYR,PHP,SGD,THB'
+    );
+    if (!res.ok) throw new Error('Frankfurter 환율 응답 실패: ' + res.status);
+    const data = await res.json();
+    const rates = {};
+    Object.entries(data.rates || {}).forEach(([cur, krwPerUnit]) => {
+      const n = Number(krwPerUnit);
+      if (n > 0) rates[cur] = Math.round((1 / n) * 100) / 100; // KRW 기준 응답을 "1외화 = ?원"으로 뒤집음
+    });
+    return rates;
+  }
+
+  async function fetchExtraRates() {
+    const res = await fetch('https://open.er-api.com/v6/latest/KRW');
+    if (!res.ok) throw new Error('보조 환율 응답 실패: ' + res.status);
+    const data = await res.json();
+    if (data.result !== 'success') throw new Error('보조 환율 조회 결과가 정상이 아닙니다.');
+    const rates = {};
+    ['VND', 'TWD'].forEach((cur) => {
+      const perKrw = Number(data.rates && data.rates[cur]); // 1원 = perKrw {cur}
+      if (perKrw > 0) rates[cur] = Math.round((1 / perKrw) * 100) / 100; // "1외화 = ?원"으로 뒤집음
+    });
+    return rates;
+  }
+
   async function ensureExchangeRates() {
     const cache = ExchangeRateStore.get();
     if (ExchangeRateStore.isFresh(cache)) {
       applyExchangeRates(cache.rates);
       return;
     }
-    try {
-      const res = await fetch('https://api.frankfurter.dev/v1/latest?base=KRW&symbols=USD,CAD,GBP,EUR,JPY');
-      if (!res.ok) throw new Error('환율 응답 실패: ' + res.status);
-      const data = await res.json();
-      const rates = {};
-      Object.entries(data.rates || {}).forEach(([cur, krwPerUnit]) => {
-        const n = Number(krwPerUnit);
-        if (n > 0) rates[cur] = Math.round((1 / n) * 100) / 100; // KRW 기준 응답을 "1외화 = ?원"으로 뒤집음
-      });
-      if (Object.keys(rates).length > 0) {
-        ExchangeRateStore.set(rates);
-        applyExchangeRates(rates);
-      } else if (cache) {
-        applyExchangeRates(cache.rates);
+
+    const results = await Promise.allSettled([fetchFrankfurterRates(), fetchExtraRates()]);
+    let rates = {};
+    results.forEach((r, i) => {
+      if (r.status === 'fulfilled') {
+        rates = { ...rates, ...r.value };
+      } else {
+        console.warn(`환율 소스 ${i === 0 ? 'Frankfurter' : 'open.er-api'} 조회 실패`, r.reason);
       }
-    } catch (e) {
-      console.warn('환율 자동 조회 실패, 캐시나 수동 입력으로 대체합니다.', e);
-      if (cache) applyExchangeRates(cache.rates);
+    });
+
+    if (Object.keys(rates).length > 0) {
+      // 이전 캐시와 합쳐서 저장: 이번에 실패한 소스가 있어도 지난번 값은 유지
+      const merged = { ...((cache && cache.rates) || {}), ...rates };
+      ExchangeRateStore.set(merged);
+      applyExchangeRates(merged);
+    } else if (cache) {
+      applyExchangeRates(cache.rates);
       // 캐시도 전혀 없으면 아무 것도 하지 않고 기존 수동 입력 흐름 그대로 유지
     }
   }
