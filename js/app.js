@@ -35,19 +35,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const CURRENCY_SYMBOL = {
     KRW: '₩',
-    JPY: '¥',
-    VND: '₫',
-    THB: '฿',
-    CNY: '¥',
-    TWD: 'NT$',
-    PHP: '₱',
-    IDR: 'Rp',
-    USD: '$',
-    SGD: 'S$',
-    MYR: 'RM',
-    CAD: 'C$',
-    GBP: '£',
-    EUR: '€',
+    JPY(일본): '¥',
+    VND(베트남): '₫',
+    THB(태국): '฿',
+    CNY(중국): '¥',
+    TWD(대만): 'NT$',
+    PHP(필ㄹ핀(: '₱',
+    IDR(인도네시아): 'Rp',
+    USD(미국): '$',
+    SGD(싱가포르): 'S$',
+    MYR(말레이시아): 'RM',
+    CAD(캐나다): 'C$',
+    GBP(영국): '£',
+    EUR(유럽): '€',
   };
 
   // 한국 원화는 소수점 없이 표시 (반올림)
