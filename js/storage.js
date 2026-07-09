@@ -94,6 +94,40 @@ const HistoryStore = (() => {
   return { getAll, add, remove, clear, getWeeklySavings, RETENTION_DAYS };
 })();
 
+// ---- 환율 자동 조회 캐시 (하루 1회만 실제 조회하고, 나머지는 캐시 재사용) ----
+const ExchangeRateStore = (() => {
+  const KEY = 'alddeul-yojeong:exchange-rate-cache';
+
+  function todayStr() {
+    // 환율은 하루 단위 값이라 타임존 경계의 약간의 오차는 실질적으로 문제되지 않는다.
+    return new Date().toISOString().slice(0, 10); // 'YYYY-MM-DD'
+  }
+
+  function get() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      console.error('환율 캐시를 불러오지 못했습니다.', e);
+      return null;
+    }
+  }
+
+  function set(rates) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify({ date: todayStr(), rates, fetchedAt: new Date().toISOString() }));
+    } catch (e) {
+      console.error('환율 캐시 저장에 실패했습니다.', e);
+    }
+  }
+
+  function isFresh(cache) {
+    return !!cache && cache.date === todayStr();
+  }
+
+  return { get, set, isFresh, todayStr };
+})();
+
 // ---- 입력 중 자동 임시저장 (새로고침/앱 재시작해도 입력값 유지) ----
 const DraftStore = (() => {
   const KEY = 'alddeul-yojeong:draft';
