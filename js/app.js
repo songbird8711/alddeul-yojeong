@@ -216,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const sym = CURRENCY_SYMBOL[result.currency] || '';
       let text = `${result.unitLabel} ${krw(result.unitPriceKRW)}원`;
       if (result.currency !== 'KRW') {
-        text += ` (${sym}${result.payAmount.toLocaleString()} × ${krw(result.exchangeRate)})`;
+        text += ` (${sym}${result.payAmount.toLocaleString()} × ${krw(result.exchangeRate)} = ${krw(result.payAmountKRW)}원)`;
       }
       els[p].live.textContent = text;
       els[p].live.classList.remove('live-error');
