@@ -1,155 +1,503 @@
-// storage.js
-// localStorage를 다루는 부분만 모아둔 모듈.
-// 나중에 로그인/서버 동기화 기능을 추가할 때 이 파일의 내부 구현만
-// 서버 API 호출로 교체하면 되도록, 외부에는 동일한 함수 시그니처를 유지한다.
+:root {
+  --paper: #EDEAE1;
+  --paper-alt: #E4E0D4;
+  --ink: #1C1B1A;
+  --ink-soft: #55524A;
+  --cheap-green: #1E7F4C;
+  --high-red: #B23A2E;
+  --highlight: #F2C744;
+  --line: #C9C4B4;
 
-const HistoryStore = (() => {
-  const KEY = 'alddeul-yojeong:grocery-history';
-  const RETENTION_DAYS = 30; // 개수 제한 대신 "최근 30일" 기준으로 보관 (이번 주 절약액을 정확히 계산하기 위함)
-  const HARD_CAP = 200; // localStorage 용량 보호용 안전장치 (30일 안에 200건 넘게 쌓이는 극단적 경우 대비)
+  --font-display: 'Pretendard', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, monospace;
+}
 
-  function isWithinDays(iso, days) {
-    const savedAt = new Date(iso).getTime();
-    if (!Number.isFinite(savedAt)) return false;
-    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-    return savedAt >= cutoff;
-  }
+* { box-sizing: border-box; }
 
-  /** 30일보다 오래된 기록을 걸러낸다. */
-  function pruneOld(list) {
-    return list.filter((item) => isWithinDays(item.savedAt, RETENTION_DAYS));
-  }
+html, body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+}
 
-  function getAll() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? pruneOld(parsed) : [];
-    } catch (e) {
-      console.error('히스토리를 불러오지 못했습니다.', e);
-      return [];
-    }
-  }
+/* 은은한 종이 질감 */
+body {
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(0,0,0,0.015) 0, transparent 40%),
+    radial-gradient(circle at 80% 60%, rgba(0,0,0,0.02) 0, transparent 45%);
+}
 
-  /**
-   * 새 비교 결과를 맨 앞에 추가한다.
-   * 30일이 지난 기록은 자동으로 제거되고, HARD_CAP을 넘으면 오래된 것부터 잘라낸다.
-   * @param {Object} entry 저장할 비교 결과 스냅샷
-   */
-  function add(entry) {
-    const list = pruneOld(getAllRaw());
-    const record = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-      savedAt: new Date().toISOString(),
-      ...entry,
-    };
-    list.unshift(record);
-    const trimmed = list.slice(0, HARD_CAP);
-    try {
-      localStorage.setItem(KEY, JSON.stringify(trimmed));
-    } catch (e) {
-      console.error('히스토리 저장에 실패했습니다.', e);
-    }
-    return trimmed;
-  }
+.app {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 28px 16px 60px;
+}
 
-  // pruneOld를 적용하기 전 원본을 가져올 때 쓰는 내부 helper (getAll과 중복 파싱 피하기용)
-  function getAllRaw() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      return [];
-    }
-  }
+.brand {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.stamp-logo {
+  color: var(--cheap-green);
+  display: inline-flex;
+  padding: 8px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  transform: rotate(-6deg);
+}
+.brand h1 {
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  margin: 10px 0 4px;
+}
+.tagline {
+  color: var(--ink-soft);
+  font-size: 14px;
+  margin: 0;
+}
 
-  function remove(id) {
-    const list = getAll().filter((item) => item.id !== id);
-    try {
-      localStorage.setItem(KEY, JSON.stringify(list));
-    } catch (e) {
-      console.error('히스토리 삭제에 실패했습니다.', e);
-    }
-    return list;
-  }
+.products {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+@media (max-width: 480px) {
+  .products { grid-template-columns: 1fr; }
+}
 
-  function clear() {
-    localStorage.removeItem(KEY);
-  }
+.tag-card {
+  position: relative;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 4px 14px 4px 4px;
+  padding: 18px 16px 16px;
+  box-shadow: 2px 3px 0 rgba(28,27,26,0.06);
+}
+.tag-hole {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1px solid var(--line);
+}
+.tag-card h2 {
+  font-size: 15px;
+  margin: 0 0 12px 20px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
 
-  /**
-   * 최근 7일간 비교 기록에서 절약된 금액의 합계를 구한다.
-   * 각 기록의 cmp.diff(더 저렴한 쪽과의 단가 차이, 결과 화면에 표시되는 것과 동일한 값)를 합산한다.
-   * @returns {{ total: number, count: number }} 이번 주 절약 합계(원)와 집계된 비교 건수
-   */
-  function getWeeklySavings() {
-    const list = getAll().filter((item) => isWithinDays(item.savedAt, 7) && item.cmp && item.cmp.comparable);
-    const total = list.reduce((sum, item) => sum + (Number(item.cmp.diff) || 0), 0);
-    return { total: Math.round(total), count: list.length };
-  }
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-bottom: 10px;
+}
+.field-row {
+  display: flex;
+  gap: 8px;
+}
+.field-row .field { flex: 1; }
+.unit-field { max-width: 110px; }
 
-  return { getAll, add, remove, clear, getWeeklySavings, RETENTION_DAYS };
-})();
+input[type=number], select {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+}
+input[type=number]:focus, select:focus {
+  outline: 2px solid var(--cheap-green);
+  outline-offset: 1px;
+}
 
-// ---- 입력 중 자동 임시저장 (새로고침/앱 재시작해도 입력값 유지) ----
-const DraftStore = (() => {
-  const KEY = 'alddeul-yojeong:draft';
+.discount-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.mini-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-soft);
+  flex: 1;
+  min-width: 90px;
+}
+.mini-field.checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.mini-field input[type=checkbox] {
+  width: 16px; height: 16px;
+}
 
-  function get() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch (e) {
-      console.error('임시저장을 불러오지 못했습니다.', e);
-      return null;
-    }
-  }
+.live-price {
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+}
+.live-price.live-error {
+  color: var(--ink-soft);
+  font-weight: 400;
+  font-size: 13px;
+}
 
-  function set(draft) {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(draft));
-    } catch (e) {
-      console.error('임시저장에 실패했습니다.', e);
-    }
-  }
+.stamp-button {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ink);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+.stamp-button:hover { background: #000; }
+.stamp-button:active { transform: translateY(1px); }
 
-  function clear() {
-    localStorage.removeItem(KEY);
-  }
+.hidden { display: none; }
 
-  return { get, set, clear };
-})();
+.receipt {
+  background: #fff;
+  margin: 20px 0;
+  padding: 18px 18px 24px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  clip-path: polygon(
+    0% 0%, 100% 0%, 100% 96%,
+    95% 100%, 90% 96%, 85% 100%, 80% 96%, 75% 100%, 70% 96%,
+    65% 100%, 60% 96%, 55% 100%, 50% 96%, 45% 100%, 40% 96%,
+    35% 100%, 30% 96%, 25% 100%, 20% 96%, 15% 100%, 10% 96%,
+    5% 100%, 0% 96%
+  );
+  box-shadow: 2px 4px 10px rgba(28,27,26,0.08);
+}
+.receipt-head {
+  text-align: center;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin-bottom: 8px;
+}
+.receipt-divider {
+  border-top: 1px dashed var(--line);
+  margin: 8px 0;
+}
+.receipt-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+}
+.receipt-row.win { color: var(--cheap-green); font-weight: 700; }
+.receipt-note {
+  font-size: 11px;
+  color: var(--ink-soft);
+  padding-left: 4px;
+}
+.stamp {
+  display: inline-block;
+  border: 2px solid var(--cheap-green);
+  color: var(--cheap-green);
+  border-radius: 4px;
+  padding: 0 4px;
+  transform: rotate(-8deg);
+  font-size: 11px;
+  margin-left: 4px;
+}
+.receipt-summary {
+  text-align: center;
+  font-weight: 700;
+  margin-top: 8px;
+}
+.receipt-error {
+  color: var(--high-red);
+  font-weight: 600;
+  text-align: center;
+}
+.receipt-warning {
+  color: var(--high-red);
+  background: #FBEAE7;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  text-align: center;
+  margin-bottom: 8px;
+}
 
-// ---- 환율/할인 설정 등 "마지막에 쓰던 값" 기억 ----
-const PrefsStore = (() => {
-  const KEY = 'alddeul-yojeong:prefs';
+.exrate-hint {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+.exrate-hint.auto { color: var(--cheap-green); }
+.exrate-hint.stale { color: var(--high-red); }
 
-  function get() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      return raw ? JSON.parse(raw) : {};
-    } catch (e) {
-      console.error('환경설정을 불러오지 못했습니다.', e);
-      return {};
-    }
-  }
+.weekly-savings {
+  margin-top: 24px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1.5px solid var(--cheap-green);
+  border-radius: 8px;
+  text-align: center;
+}
+.weekly-savings-label { font-size: 12px; color: var(--ink-soft); }
+.weekly-savings-amount {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--cheap-green);
+  margin-top: 2px;
+}
+.weekly-savings-count { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
 
-  function set(prefs) {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(prefs));
-    } catch (e) {
-      console.error('환경설정 저장에 실패했습니다.', e);
-    }
-  }
+.history { margin-top: 30px; }
+.history h2 {
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.history-limit { font-weight: 400; font-size: 11px; }
+#historyList { list-style: none; padding: 0; margin: 10px 0 0; }
+.history-item {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.history-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.history-date { color: var(--ink-soft); font-size: 11px; margin-top: 2px; }
+.history-delete {
+  background: none;
+  border: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+}
+.history-delete:hover { color: var(--high-red); }
+.history-empty { color: var(--ink-soft); font-size: 13px; }
 
-  function update(partial) {
-    const merged = { ...get(), ...partial };
-    set(merged);
-    return merged;
-  }
+.app-footer {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 11px;
+  margin-top: 40px;
+}
 
-  return { get, set, update };
-})();
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ---- 사진 OCR 입력 UI ---- */
+.photo-block { margin-bottom: 12px; }
+.photo-btn {
+  width: 100%;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1.5px dashed var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.photo-btn:hover { border-color: var(--cheap-green); color: var(--cheap-green); }
+
+.photo-preview-wrap { margin-top: 10px; }
+.photo-preview {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  display: block;
+}
+.ocr-status {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 6px;
+  text-align: center;
+}
+.ocr-status.ocr-error { color: var(--high-red); }
+.ocr-status.ocr-done { color: var(--cheap-green); font-weight: 600; }
+
+.ocr-candidates { margin-top: 8px; }
+.ocr-chip-group { margin-bottom: 8px; }
+.ocr-chip-group-label {
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-bottom: 4px;
+}
+.ocr-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ocr-chip {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ocr-chip:hover, .ocr-chip:active {
+  border-color: var(--cheap-green);
+  background: #EAF6EF;
+  color: var(--cheap-green);
+}
+
+.field-hint {
+  font-weight: 400;
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+/* ---- 온라인 최저가 확인 ---- */
+.online-check { margin-top: 14px; }
+.online-hint {
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+  margin-bottom: 8px;
+}
+.online-btn {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.online-btn:hover { border-color: var(--cheap-green); color: var(--cheap-green); }
+
+.online-result { margin-bottom: 14px; }
+.online-status {
+  font-size: 12px;
+  color: var(--ink-soft);
+  text-align: center;
+  padding: 8px;
+}
+.online-status.online-error { color: var(--high-red); }
+
+.online-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  margin-bottom: 6px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--ink);
+}
+.online-item.cheapest { border-color: var(--cheap-green); background: #EAF6EF; }
+.online-item-price {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 14px;
+}
+.online-item-title {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.online-item-mall {
+  font-size: 11px;
+  color: var(--cheap-green);
+}
+
+/* ---- 상단 툴바 (A/B 바꾸기, 초기화) ---- */
+.toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.toolbar-btn {
+  flex: 1;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.toolbar-btn:hover { color: var(--ink); border-color: var(--ink); }
+
+/* ---- 하단 고정 비교하기 바 ---- */
+.compare-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--paper) 60%, rgba(237,234,225,0));
+  z-index: 10;
+}
+.compare-bar .stamp-button {
+  max-width: 640px;
+  margin: 0 auto;
+  box-shadow: 0 -2px 12px rgba(28,27,26,0.12);
+}
+/* 하단 고정바에 콘텐츠가 가리지 않도록 앱 하단 여백 확보 */
+.app { padding-bottom: 90px; }
+
+/* ---- 공유하기 버튼 ---- */
+.share-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--cheap-green);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.share-btn:active { transform: translateY(1px); }
+.share-status {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink-soft);
+  margin-top: 4px;
+}
+
+.history-item { cursor: pointer; }
+.history-item:hover { border-color: var(--cheap-green); }
