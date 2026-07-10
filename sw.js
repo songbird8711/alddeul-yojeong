@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v8'; // v7 -> v8: 첫 화면 단순화(자세히 입력하기 접기) 반영 위해 캐시 강제 갱신
+const CACHE_NAME = 'alddeul-yojeong-v9'; // v8 -> v9: 루트 index.html이 advancedPanel 없이 배포되던 치명적 버그 수정 (js/ 폴더에 잘못 올라간 중복 파일 정리)
 const ASSETS = [
   './index.html',
   './style.css',
