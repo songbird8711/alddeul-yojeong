@@ -53,6 +53,24 @@ document.addEventListener('DOMContentLoaded', () => {
     EUR: '€',
   };
 
+  // 기호만으로는 어느 나라 통화인지 헷갈릴 수 있어(예: JPY/CNY 둘 다 ¥ 계열) 표시할 때 국가명을 같이 붙인다
+  const CURRENCY_LABEL = {
+    KRW: '한국',
+    JPY: '일본',
+    VND: '베트남',
+    THB: '태국',
+    CNY: '중국',
+    TWD: '대만',
+    PHP: '필리핀',
+    IDR: '인도네시아',
+    USD: '미국',
+    SGD: '싱가포르',
+    MYR: '말레이시아',
+    CAD: '캐나다',
+    GBP: '영국',
+    EUR: '유럽',
+  };
+
   // 한국 원화는 소수점 없이 표시 (반올림)
   function krw(n) {
     return Math.round(n).toLocaleString();
@@ -224,9 +242,10 @@ document.addEventListener('DOMContentLoaded', () => {
       const input = readInput(p);
       const result = Calculator.calcUnitPrice(input);
       const sym = CURRENCY_SYMBOL[result.currency] || '';
+      const label = CURRENCY_LABEL[result.currency] ? `${CURRENCY_LABEL[result.currency]} ` : '';
       let text = `${result.unitLabel} ${krw(result.unitPriceKRW)}원`;
       if (result.currency !== 'KRW') {
-        text += ` (${sym}${result.payAmount.toLocaleString()} × ${krw(result.exchangeRate)} = ${krw(result.payAmountKRW)}원)`;
+        text += ` (${label}${sym}${result.payAmount.toLocaleString()} × ${krw(result.exchangeRate)} = ${krw(result.payAmountKRW)}원)`;
       }
       els[p].live.textContent = text;
       els[p].live.classList.remove('live-error');
@@ -422,18 +441,48 @@ document.addEventListener('DOMContentLoaded', () => {
     scheduleDraftSave();
   });
 
-  // ---- 사진 OCR ----
-  let ocrWorker = null; // 워커 하나를 재사용 (상품 A/B 둘 다 같은 워커 공유)
+  // ---- 사진 OCR (PaddleOCR - 한국어 전용 모델) ----
+  let ocrService = null; // 초기화된 서비스 인스턴스 재사용 (상품 A/B 둘 다 같은 서비스 공유)
+  let ocrInitPromise = null; // 동시에 두 번 초기화되지 않도록 진행 중인 초기화 프로미스를 공유
 
-  async function getOcrWorker(onProgress) {
-    if (ocrWorker) return ocrWorker;
-    if (typeof Tesseract === 'undefined') {
+  async function getOcrService() {
+    if (ocrService) return ocrService;
+    if (ocrInitPromise) return ocrInitPromise;
+    if (typeof PaddleOcrService === 'undefined') {
       throw new Error('OCR 라이브러리를 아직 불러오지 못했어요. 잠시 후 다시 시도해주세요.');
     }
-    ocrWorker = await Tesseract.createWorker('kor+eng', 1, {
-      logger: onProgress,
-    });
-    return ocrWorker;
+    ocrInitPromise = (async () => {
+      const service = new PaddleOcrService({ model: window.PADDLE_KOREAN_MODEL });
+      await service.initialize();
+      ocrService = service;
+      return service;
+    })();
+    try {
+      return await ocrInitPromise;
+    } catch (e) {
+      ocrInitPromise = null; // 초기화 실패 시 다음 시도에서 다시 시도할 수 있게 초기화
+      throw e;
+    }
+  }
+
+  // 사진 파일을 PaddleOCR가 받을 수 있는 캔버스로 변환
+  async function fileToCanvas(file) {
+    const url = URL.createObjectURL(file);
+    try {
+      const img = new Image();
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('이미지를 불러오지 못했어요.'));
+        img.src = url;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d').drawImage(img, 0, 0);
+      return canvas;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
 
   function initPhotoOcr(p) {
@@ -446,15 +495,13 @@ document.addEventListener('DOMContentLoaded', () => {
       els[p].photoPreviewWrap.classList.remove('hidden');
       els[p].photoPreview.src = URL.createObjectURL(file);
       els[p].ocrCandidates.innerHTML = '';
-      setOcrStatus(p, '가격표 읽는 중... (처음 사용 시 10~30초 정도 걸려요)', 'loading');
+      setOcrStatus(p, '가격표 읽는 중이에요... (처음 사용 시 모델을 내려받느라 다소 걸릴 수 있어요)', 'loading');
 
       try {
-        const worker = await getOcrWorker((m) => {
-          if (m.status === 'recognizing text') {
-            setOcrStatus(p, `글자 인식 중... ${Math.round((m.progress || 0) * 100)}%`, 'loading');
-          }
-        });
-        const { data: { text } } = await worker.recognize(file);
+        const service = await getOcrService();
+        const canvas = await fileToCanvas(file);
+        const result = await service.recognize(canvas);
+        const text = result && result.text ? result.text : '';
         const analysis = OcrParser.analyze(text);
         renderOcrCandidates(p, analysis);
       } catch (err) {
@@ -551,8 +598,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function formatRow(label, r) {
     const sym = CURRENCY_SYMBOL[r.currency] || '';
+    const countryLabel = CURRENCY_LABEL[r.currency] ? `${CURRENCY_LABEL[r.currency]} ` : '';
     const original = r.currency !== 'KRW'
-      ? `<div class="receipt-note">· 원래 가격 ${sym}${r.payAmount.toLocaleString()} × 환율 ${krw(r.exchangeRate)} = ${krw(r.payAmountKRW)}원</div>`
+      ? `<div class="receipt-note">· 원래 가격 ${countryLabel}${sym}${r.payAmount.toLocaleString()} × 환율 ${krw(r.exchangeRate)} = ${krw(r.payAmountKRW)}원</div>`
       : '';
     return { sym, original };
   }

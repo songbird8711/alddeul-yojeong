@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v6'; // v5 -> v6: 여행지 통화 10종 추가 + 환율 버그 수정을 기존 사용자에게 즉시 반영하기 위해 버전업
+const CACHE_NAME = 'alddeul-yojeong-v7'; // v5 -> v7: 환율/통화 확장 + OCR 엔진을 Tesseract에서 PaddleOCR로 교체
 const ASSETS = [
   './index.html',
   './style.css',

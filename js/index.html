@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>알뜰요정 · 장보기 단가 비교</title>
+<meta name="description" content="두 상품의 가격, 용량, 할인 조건을 넣으면 진짜 단가를 비교해주는 알뜰요정 계산기">
+<meta name="theme-color" content="#EDEAE1">
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app">
+  <header class="brand">
+    <div class="stamp-logo" aria-hidden="true">
+      <svg viewBox="0 0 64 64" width="48" height="48">
+        <circle cx="32" cy="32" r="28" fill="none" stroke="currentColor" stroke-width="3"/>
+        <path d="M20 34 L28 42 L45 22" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h1>알뜰요정</h1>
+    <p class="tagline">진짜 가격, 요정이 도장 찍어드려요</p>
+  </header>
+
+  <main>
+    <div class="toolbar">
+      <button type="button" class="toolbar-btn" id="swapBtn">🔄 A↔B 바꾸기</button>
+      <button type="button" class="toolbar-btn" id="resetBtn">🗑️ 초기화</button>
+    </div>
+
+    <section class="products" aria-label="상품 입력">
+
+      <div class="tag-card">
+        <span class="tag-hole" aria-hidden="true"></span>
+        <h2>상품 A</h2>
+
+        <div class="photo-block">
+          <button type="button" class="photo-btn" id="photoBtnA">📷 사진으로 입력</button>
+          <input type="file" accept="image/*" capture="environment" id="photoInputA" class="hidden">
+          <div class="photo-preview-wrap hidden" id="photoPreviewWrapA">
+            <img class="photo-preview" id="photoPreviewA" alt="촬영한 가격표 사진">
+            <div class="ocr-status" id="ocrStatusA"></div>
+            <div class="ocr-candidates" id="ocrCandidatesA"></div>
+          </div>
+        </div>
+
+        <label class="field">
+          상품명 <span class="field-hint">— 입력하면 온라인 최저가 확인 가능</span>
+          <input type="text" id="nameA" placeholder="예: 국산 삼겹살 500g">
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            가격
+            <input type="number" id="priceA" inputmode="decimal" placeholder="예: 10000">
+          </label>
+          <label class="field unit-field">
+            통화
+            <select id="currencyA">
+              <option value="KRW">KRW ₩</option>
+              <option value="JPY">JPY ¥</option>
+              <option value="VND">VND ₫</option>
+              <option value="THB">THB ฿</option>
+              <option value="CNY">CNY ¥</option>
+              <option value="TWD">TWD NT$</option>
+              <option value="PHP">PHP ₱</option>
+              <option value="IDR">IDR Rp</option>
+              <option value="USD">USD $</option>
+              <option value="SGD">SGD S$</option>
+              <option value="MYR">MYR RM</option>
+              <option value="CAD">CAD C$</option>
+              <option value="GBP">GBP £</option>
+              <option value="EUR">EUR €</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="field-row hidden" id="exchangeRateWrapA">
+          <label class="field">
+            환율 (1외화 = ?원)
+            <input type="number" id="exchangeRateA" inputmode="decimal" placeholder="예: 1350">
+          </label>
+          <div class="exrate-hint" id="exrateHintA"></div>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            용량/수량
+            <input type="number" id="amountA" inputmode="decimal" placeholder="예: 500">
+          </label>
+          <label class="field unit-field">
+            단위
+            <select id="unitA">
+              <optgroup label="무게 (자동환산)">
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="lb">lb (파운드)</option>
+                <option value="oz">oz</option>
+              </optgroup>
+              <optgroup label="부피">
+                <option value="ml">ml</option>
+              </optgroup>
+              <optgroup label="개수">
+                <option value="ea">개</option>
+              </optgroup>
+            </select>
+          </label>
+        </div>
+
+        <div class="field-row hidden" id="weightPerUnitWrapA">
+          <label class="field">
+            1개당 무게(g) <span class="field-hint">— 고기·계란처럼 개수+무게 있는 상품용</span>
+            <input type="number" id="weightPerUnitA" inputmode="decimal" placeholder="예: 500">
+          </label>
+        </div>
+
+        <label class="field">
+          할인 조건
+          <select id="discountTypeA">
+            <option value="none">없음</option>
+            <option value="bundle">묶음 (예: 1+1)</option>
+            <option value="percent">정률 할인 (%)</option>
+            <option value="flat">정액 할인 (원)</option>
+            <option value="card">카드 조건부 할인</option>
+          </select>
+        </label>
+        <div class="discount-params" id="discountParamsA"></div>
+
+        <div class="live-price" id="liveA">값을 입력해주세요</div>
+      </div>
+
+      <div class="tag-card">
+        <span class="tag-hole" aria-hidden="true"></span>
+        <h2>상품 B</h2>
+
+        <div class="photo-block">
+          <button type="button" class="photo-btn" id="photoBtnB">📷 사진으로 입력</button>
+          <input type="file" accept="image/*" capture="environment" id="photoInputB" class="hidden">
+          <div class="photo-preview-wrap hidden" id="photoPreviewWrapB">
+            <img class="photo-preview" id="photoPreviewB" alt="촬영한 가격표 사진">
+            <div class="ocr-status" id="ocrStatusB"></div>
+            <div class="ocr-candidates" id="ocrCandidatesB"></div>
+          </div>
+        </div>
+
+        <label class="field">
+          상품명 <span class="field-hint">— 입력하면 온라인 최저가 확인 가능</span>
+          <input type="text" id="nameB" placeholder="예: 국산 삼겹살 500g">
+        </label>
+
+        <div class="field-row">
+          <label class="field">
+            가격
+            <input type="number" id="priceB" inputmode="decimal" placeholder="예: 15000">
+          </label>
+          <label class="field unit-field">
+            통화
+            <select id="currencyB">
+              <option value="KRW">KRW ₩</option>
+              <option value="JPY">JPY ¥</option>
+              <option value="VND">VND ₫</option>
+              <option value="THB">THB ฿</option>
+              <option value="CNY">CNY ¥</option>
+              <option value="TWD">TWD NT$</option>
+              <option value="PHP">PHP ₱</option>
+              <option value="IDR">IDR Rp</option>
+              <option value="USD">USD $</option>
+              <option value="SGD">SGD S$</option>
+              <option value="MYR">MYR RM</option>
+              <option value="CAD">CAD C$</option>
+              <option value="GBP">GBP £</option>
+              <option value="EUR">EUR €</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="field-row hidden" id="exchangeRateWrapB">
+          <label class="field">
+            환율 (1외화 = ?원)
+            <input type="number" id="exchangeRateB" inputmode="decimal" placeholder="예: 1350">
+          </label>
+          <div class="exrate-hint" id="exrateHintB"></div>
+        </div>
+
+        <div class="field-row">
+          <label class="field">
+            용량/수량
+            <input type="number" id="amountB" inputmode="decimal" placeholder="예: 500">
+          </label>
+          <label class="field unit-field">
+            단위
+            <select id="unitB">
+              <optgroup label="무게 (자동환산)">
+                <option value="g">g</option>
+                <option value="kg">kg</option>
+                <option value="lb">lb (파운드)</option>
+                <option value="oz">oz</option>
+              </optgroup>
+              <optgroup label="부피">
+                <option value="ml">ml</option>
+              </optgroup>
+              <optgroup label="개수">
+                <option value="ea">개</option>
+              </optgroup>
+            </select>
+          </label>
+        </div>
+
+        <div class="field-row hidden" id="weightPerUnitWrapB">
+          <label class="field">
+            1개당 무게(g) <span class="field-hint">— 고기·계란처럼 개수+무게 있는 상품용</span>
+            <input type="number" id="weightPerUnitB" inputmode="decimal" placeholder="예: 500">
+          </label>
+        </div>
+
+        <label class="field">
+          할인 조건
+          <select id="discountTypeB">
+            <option value="none">없음</option>
+            <option value="bundle">묶음 (예: 1+1)</option>
+            <option value="percent">정률 할인 (%)</option>
+            <option value="flat">정액 할인 (원)</option>
+            <option value="card">카드 조건부 할인</option>
+          </select>
+        </label>
+        <div class="discount-params" id="discountParamsB"></div>
+
+        <div class="live-price" id="liveB">값을 입력해주세요</div>
+      </div>
+
+    </section>
+
+    <section id="result" class="hidden" aria-live="polite"></section>
+
+    <div id="weeklySavingsBox" class="weekly-savings hidden"></div>
+
+    <section class="history">
+      <h2>최근 비교 기록 <span class="history-limit">(최근 30일, 이 기기에만 저장 · 탭하면 다시 불러와요)</span></h2>
+      <ul id="historyList"></ul>
+    </section>
+  </main>
+
+  <footer class="app-footer">알뜰요정 · 다음 업데이트: 게임 효율 계산기</footer>
+</div>
+
+<div class="compare-bar">
+  <button id="compareBtn" class="stamp-button">비교하기</button>
+</div>
+
+
+<script src="js/calculator.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/ocr.js"></script>
+<script type="module">
+  // PaddleOCR(ppu-paddle-ocr) 브라우저 빌드를 CDN에서 불러와 전역(window)에 노출.
+  // jsdelivr의 +esm 변환을 사용해 onnxruntime-web 등 내부 의존성까지 브라우저에서 바로 동작하도록 번들링.
+  // app.js는 일반 스크립트라 이 모듈 스크립트가 먼저 끝난 뒤(DOMContentLoaded 전에) 실행되므로 순서 문제 없음.
+  import { PaddleOcrService, V5_KOREAN_MOBILE_MODEL } from 'https://cdn.jsdelivr.net/npm/ppu-paddle-ocr@6.0.0/web/+esm';
+  window.PaddleOcrService = PaddleOcrService;
+  window.PADDLE_KOREAN_MODEL = V5_KOREAN_MOBILE_MODEL;
+</script>
+<script src="js/app.js"></script>
+</body>
+</html>
