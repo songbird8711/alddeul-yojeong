@@ -13,7 +13,10 @@ const OcrParser = (() => {
   function extractPriceCandidates(text) {
     const found = new Map(); // value -> raw
 
-    const markedRe = /(?:₩\s?)?(\d{1,3}(?:,\d{3})+|\d{3,})\s?원?/g;
+    // 콤마 있는 숫자는 자릿수 제한 없음(정상적인 가격 표기 방식이라 안전).
+    // 콤마 없는 숫자는 3~6자리까지만 허용 — 장보기 가격은 보통 이 범위(최대 99만원대)라
+    // 바코드처럼 7자리 이상 길게 이어지는 숫자가 "가격"으로 오인식되는 것을 막는다.
+    const markedRe = /(?:₩\s?)?(\d{1,3}(?:,\d{3})+|(?<!\d)\d{3,6}(?!\d))\s?원?/g;
     let m;
     while ((m = markedRe.exec(text)) !== null) {
       const raw = m[0].trim();
@@ -55,6 +58,47 @@ const OcrParser = (() => {
   }
 
   /**
+   * OCR 텍스트에서 상품명으로 보이는 한 줄을 추측한다.
+   * 숫자/단위/통화기호만 있는 줄은 제외하고, 한글이 가장 많이 포함된 줄을 상품명으로 본다.
+   * (ESL 라벨은 보통 상품명이 한 줄, 가격/용량은 숫자 위주라 이 방식이 실사용에서 잘 맞는다)
+   */
+  function guessProductName(text) {
+    const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
+    let best = null;
+    let bestScore = 0;
+    for (const line of lines) {
+      const hangulCount = (line.match(/[\uAC00-\uD7A3]/g) || []).length;
+      const isMostlyNumeric = /^[\d,.\s원₩%\-+/a-zA-Z]*$/.test(line);
+      if (hangulCount >= 2 && !isMostlyNumeric && line.length <= 30 && hangulCount > bestScore) {
+        bestScore = hangulCount;
+        best = line;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * 쇼핑리스트 자동추가용: 후보들 중 가장 그럴듯한 값 하나씩만 뽑아서 반환한다.
+   * (기존 analyze()는 후보 목록을 반환해서 사용자가 직접 고르게 했지만,
+   *  자동추가 흐름에서는 사람이 고를 시간이 없으므로 "가장 그럴듯한 것 하나"를 바로 확정한다)
+   * @returns {{ name: string|null, price: number|null, amount: number|null, unit: string|null, complete: boolean }}
+   */
+  function autoExtract(text) {
+    const priceCandidates = extractPriceCandidates(text);
+    const amountCandidates = extractAmountCandidates(text);
+    const price = priceCandidates.length > 0 ? priceCandidates[0].value : null; // 이미 큰 금액순 정렬됨
+    const amountInfo = amountCandidates.length > 0 ? amountCandidates[0] : null;
+    const name = guessProductName(text);
+    return {
+      name,
+      price,
+      amount: amountInfo ? amountInfo.value : null,
+      unit: amountInfo ? amountInfo.unit : null,
+      complete: price != null && amountInfo != null, // 이름은 못 찾아도 계산 자체는 가능
+    };
+  }
+
+  /**
    * OCR 텍스트 전체를 분석해서 가격/용량 후보를 한번에 반환한다.
    */
   function analyze(text) {
@@ -64,5 +108,5 @@ const OcrParser = (() => {
     };
   }
 
-  return { analyze, extractPriceCandidates, extractAmountCandidates };
+  return { analyze, autoExtract, extractPriceCandidates, extractAmountCandidates, guessProductName };
 })();

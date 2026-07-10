@@ -438,6 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   ensureExchangeRates();
+  initShoppingList();
 
   // ---- 입력 중 자동 임시저장 (products 영역 안의 모든 입력 변화를 위임 방식으로 감지) ----
   let draftSaveTimer = null;
@@ -565,6 +566,140 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('OCR 오류:', err);
         setOcrStatus(p, '인식하지 못했어요. 직접 입력해주세요.', 'error');
       }
+    });
+  }
+
+  // ---- 오늘 장보기 리스트 (ESL 자동추가, 베타) ----
+  let addToastTimer = null;
+
+  function renderShoppingList() {
+    const list = ShoppingListStore.getAll();
+    const listEl = document.getElementById('shoppingList');
+    const totalEl = document.getElementById('listTotal');
+
+    if (list.length === 0) {
+      listEl.innerHTML = '';
+      totalEl.textContent = '담은 상품이 없어요';
+      return;
+    }
+
+    const total = ShoppingListStore.getTotal();
+    totalEl.innerHTML = `담은 상품 <b>${list.length}개</b> · 합계 <b>${krw(total)}원</b>`;
+
+    listEl.innerHTML = list.map((item) => `
+      <li class="list-item" data-id="${item.id}">
+        <div class="list-item-main">
+          <span class="list-item-name">${item.name || '(상품명 미확인)'}</span>
+          <span class="list-item-price">${krw(item.price)}원</span>
+        </div>
+        <div class="list-item-unit">${item.unitLabel} ${krw(item.unitPriceKRW)}원</div>
+        <button type="button" class="list-item-remove" data-remove-id="${item.id}" aria-label="삭제">✕</button>
+      </li>
+    `).join('');
+
+    listEl.querySelectorAll('[data-remove-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        ShoppingListStore.remove(btn.getAttribute('data-remove-id'));
+        renderShoppingList();
+      });
+    });
+  }
+
+  function showAddToast(record) {
+    const toast = document.getElementById('addToast');
+    const textEl = document.getElementById('addToastText');
+    const undoBtn = document.getElementById('addToastUndoBtn');
+
+    textEl.textContent = `✓ ${record.name || '상품'} 담았습니다`;
+    toast.classList.remove('hidden', 'toast-error');
+
+    if (addToastTimer) clearTimeout(addToastTimer);
+    addToastTimer = setTimeout(() => toast.classList.add('hidden'), 4000);
+
+    // 이전 클릭 리스너가 남아있지 않도록 버튼을 매번 새로 교체(clone)한 뒤 새 리스너를 하나만 붙인다
+    const freshUndoBtn = undoBtn.cloneNode(true);
+    undoBtn.replaceWith(freshUndoBtn);
+    freshUndoBtn.addEventListener('click', () => {
+      ShoppingListStore.remove(record.id);
+      renderShoppingList();
+      toast.classList.add('hidden');
+      if (addToastTimer) clearTimeout(addToastTimer);
+    });
+  }
+
+  function showErrorToast(message) {
+    const toast = document.getElementById('addToast');
+    const textEl = document.getElementById('addToastText');
+    const undoBtn = document.getElementById('addToastUndoBtn');
+    textEl.textContent = message;
+    undoBtn.classList.add('hidden');
+    toast.classList.remove('hidden');
+    toast.classList.add('toast-error');
+    if (addToastTimer) clearTimeout(addToastTimer);
+    addToastTimer = setTimeout(() => toast.classList.add('hidden'), 4000);
+  }
+
+  function initShoppingList() {
+    renderShoppingList();
+
+    const captureBtn = document.getElementById('eslCaptureBtn');
+    const captureInput = document.getElementById('eslCaptureInput');
+    const clearBtn = document.getElementById('listClearBtn');
+
+    captureBtn.addEventListener('click', () => captureInput.click());
+
+    captureInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      captureBtn.disabled = true;
+      captureBtn.textContent = '📷 인식하는 중...';
+
+      try {
+        const service = await getOcrService();
+        const canvas = await fileToCanvas(file);
+        const result = await service.recognize(canvas);
+        const text = result && result.text ? result.text : '';
+        const extracted = OcrParser.autoExtract(text);
+
+        if (!extracted.complete) {
+          showErrorToast('가격이나 용량을 읽지 못했어요. 다시 촬영해주세요.');
+          return;
+        }
+
+        const calc = Calculator.calcUnitPrice({
+          price: extracted.price,
+          amount: extracted.amount,
+          unit: extracted.unit,
+          currency: 'KRW',
+          discountType: 'none',
+        });
+
+        const record = ShoppingListStore.add({
+          name: extracted.name,
+          price: extracted.price,
+          amount: extracted.amount,
+          unit: extracted.unit,
+          unitLabel: calc.unitLabel,
+          unitPriceKRW: calc.unitPriceKRW,
+          priceKRW: extracted.price, // KRW 고정 흐름이라 payAmountKRW와 동일
+        });
+
+        renderShoppingList();
+        showAddToast(record);
+      } catch (err) {
+        console.error('ESL 자동추가 오류:', err);
+        showErrorToast('인식에 실패했어요. 다시 촬영해주세요.');
+      } finally {
+        captureBtn.disabled = false;
+        captureBtn.textContent = '📷 ESL 촬영해서 담기';
+        captureInput.value = ''; // 같은 사진을 다시 선택해도 change 이벤트가 나가도록 초기화
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      ShoppingListStore.clear();
+      renderShoppingList();
     });
   }
 

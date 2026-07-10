@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v7'; // v5 -> v7: 환율/통화 확장 + OCR 엔진을 Tesseract에서 PaddleOCR로 교체
+const CACHE_NAME = 'alddeul-yojeong-v10'; // v9 -> v10: "오늘 장보기" 리스트(ESL 자동추가 프로토타입) 추가
 const ASSETS = [
   './index.html',
   './style.css',

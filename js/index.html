@@ -35,6 +35,20 @@
       <button type="button" class="toolbar-btn" id="resetBtn">🗑️ 초기화</button>
     </div>
 
+    <section class="shopping-list-section" aria-label="오늘 장보기">
+      <div class="list-header">
+        <h2>🧚 오늘 장보기 <span class="beta-badge">베타</span></h2>
+        <button type="button" class="list-clear-btn" id="listClearBtn">비우기</button>
+      </div>
+
+      <button type="button" class="esl-capture-btn" id="eslCaptureBtn">📷 ESL 촬영해서 담기</button>
+      <input type="file" accept="image/*" capture="environment" id="eslCaptureInput" class="hidden">
+
+      <div class="list-total" id="listTotal">담은 상품이 없어요</div>
+
+      <ul class="shopping-list" id="shoppingList"></ul>
+    </section>
+
     <section class="products" aria-label="상품 입력">
 
       <div class="tag-card">
@@ -270,6 +284,10 @@
   <button id="compareBtn" class="stamp-button">비교하기</button>
 </div>
 
+<div class="add-toast hidden" id="addToast">
+  <span id="addToastText"></span>
+  <button type="button" id="addToastUndoBtn">취소</button>
+</div>
 
 <script src="js/calculator.js"></script>
 <script src="js/storage.js"></script>

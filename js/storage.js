@@ -3,6 +3,65 @@
 // 나중에 로그인/서버 동기화 기능을 추가할 때 이 파일의 내부 구현만
 // 서버 API 호출로 교체하면 되도록, 외부에는 동일한 함수 시그니처를 유지한다.
 
+// ---- 오늘 장보기 리스트 (ESL 자동추가 프로토타입) ----
+// A/B 비교와는 별개의 저장 공간. 마트 안에서 담는 상품들을 순서대로 쌓아둔다.
+const ShoppingListStore = (() => {
+  const KEY = 'alddeul-yojeong:shopping-list';
+
+  function getAll() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('쇼핑리스트를 불러오지 못했습니다.', e);
+      return [];
+    }
+  }
+
+  function save(list) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(list));
+    } catch (e) {
+      console.error('쇼핑리스트 저장에 실패했습니다.', e);
+    }
+  }
+
+  /**
+   * ESL에서 자동 추출된 항목을 리스트 맨 위에 추가한다.
+   * @param {Object} item { name, price, amount, unit, unitLabel, unitPriceKRW, priceKRW }
+   * @returns {Object} 저장된 레코드(id, addedAt 포함) — 되돌리기(취소)에 필요
+   */
+  function add(item) {
+    const list = getAll();
+    const record = {
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      addedAt: new Date().toISOString(),
+      ...item,
+    };
+    list.unshift(record);
+    save(list);
+    return record;
+  }
+
+  function remove(id) {
+    const list = getAll().filter((item) => item.id !== id);
+    save(list);
+    return list;
+  }
+
+  function clear() {
+    localStorage.removeItem(KEY);
+  }
+
+  function getTotal() {
+    return getAll().reduce((sum, item) => sum + (Number(item.priceKRW) || 0), 0);
+  }
+
+  return { getAll, add, remove, clear, getTotal };
+})();
+
 const HistoryStore = (() => {
   const KEY = 'alddeul-yojeong:grocery-history';
   const RETENTION_DAYS = 30; // 개수 제한 대신 "최근 30일" 기준으로 보관 (이번 주 절약액을 정확히 계산하기 위함)
