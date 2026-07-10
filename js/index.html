@@ -41,53 +41,11 @@
         <span class="tag-hole" aria-hidden="true"></span>
         <h2>상품 A</h2>
 
-        <div class="photo-block">
-          <button type="button" class="photo-btn" id="photoBtnA">📷 사진으로 입력</button>
-          <input type="file" accept="image/*" capture="environment" id="photoInputA" class="hidden">
-          <div class="photo-preview-wrap hidden" id="photoPreviewWrapA">
-            <img class="photo-preview" id="photoPreviewA" alt="촬영한 가격표 사진">
-            <div class="ocr-status" id="ocrStatusA"></div>
-            <div class="ocr-candidates" id="ocrCandidatesA"></div>
-          </div>
-        </div>
-
-        <label class="field">
-          상품명 <span class="field-hint">— 입력하면 온라인 최저가 확인 가능</span>
-          <input type="text" id="nameA" placeholder="예: 국산 삼겹살 500g">
-        </label>
-
         <div class="field-row">
           <label class="field">
             가격
             <input type="number" id="priceA" inputmode="decimal" placeholder="예: 10000">
           </label>
-          <label class="field unit-field">
-            통화
-            <select id="currencyA">
-              <option value="KRW">KRW ₩</option>
-              <option value="JPY">JPY ¥</option>
-              <option value="VND">VND ₫</option>
-              <option value="THB">THB ฿</option>
-              <option value="CNY">CNY ¥</option>
-              <option value="TWD">TWD NT$</option>
-              <option value="PHP">PHP ₱</option>
-              <option value="IDR">IDR Rp</option>
-              <option value="USD">USD $</option>
-              <option value="SGD">SGD S$</option>
-              <option value="MYR">MYR RM</option>
-              <option value="CAD">CAD C$</option>
-              <option value="GBP">GBP £</option>
-              <option value="EUR">EUR €</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="field-row hidden" id="exchangeRateWrapA">
-          <label class="field">
-            환율 (1외화 = ?원)
-            <input type="number" id="exchangeRateA" inputmode="decimal" placeholder="예: 1350">
-          </label>
-          <div class="exrate-hint" id="exrateHintA"></div>
         </div>
 
         <div class="field-row">
@@ -114,55 +72,30 @@
           </label>
         </div>
 
-        <div class="field-row hidden" id="weightPerUnitWrapA">
-          <label class="field">
-            1개당 무게(g) <span class="field-hint">— 고기·계란처럼 개수+무게 있는 상품용</span>
-            <input type="number" id="weightPerUnitA" inputmode="decimal" placeholder="예: 500">
-          </label>
-        </div>
+        <button type="button" class="advanced-toggle" id="advancedToggleA" aria-expanded="false" aria-controls="advancedPanelA">
+          <span class="advanced-toggle-icon">▾</span> 자세히 입력하기
+        </button>
 
-        <label class="field">
-          할인 조건
-          <select id="discountTypeA">
-            <option value="none">없음</option>
-            <option value="bundle">묶음 (예: 1+1)</option>
-            <option value="percent">정률 할인 (%)</option>
-            <option value="flat">정액 할인 (원)</option>
-            <option value="card">카드 조건부 할인</option>
-          </select>
-        </label>
-        <div class="discount-params" id="discountParamsA"></div>
+        <div class="advanced-panel hidden" id="advancedPanelA">
 
-        <div class="live-price" id="liveA">값을 입력해주세요</div>
-      </div>
-
-      <div class="tag-card">
-        <span class="tag-hole" aria-hidden="true"></span>
-        <h2>상품 B</h2>
-
-        <div class="photo-block">
-          <button type="button" class="photo-btn" id="photoBtnB">📷 사진으로 입력</button>
-          <input type="file" accept="image/*" capture="environment" id="photoInputB" class="hidden">
-          <div class="photo-preview-wrap hidden" id="photoPreviewWrapB">
-            <img class="photo-preview" id="photoPreviewB" alt="촬영한 가격표 사진">
-            <div class="ocr-status" id="ocrStatusB"></div>
-            <div class="ocr-candidates" id="ocrCandidatesB"></div>
+          <div class="photo-block">
+            <button type="button" class="photo-btn" id="photoBtnA">📷 사진으로 입력</button>
+            <input type="file" accept="image/*" capture="environment" id="photoInputA" class="hidden">
+            <div class="photo-preview-wrap hidden" id="photoPreviewWrapA">
+              <img class="photo-preview" id="photoPreviewA" alt="촬영한 가격표 사진">
+              <div class="ocr-status" id="ocrStatusA"></div>
+              <div class="ocr-candidates" id="ocrCandidatesA"></div>
+            </div>
           </div>
-        </div>
 
-        <label class="field">
-          상품명 <span class="field-hint">— 입력하면 온라인 최저가 확인 가능</span>
-          <input type="text" id="nameB" placeholder="예: 국산 삼겹살 500g">
-        </label>
-
-        <div class="field-row">
           <label class="field">
-            가격
-            <input type="number" id="priceB" inputmode="decimal" placeholder="예: 15000">
+            상품명 <span class="field-hint">(선택) — 입력하면 온라인 최저가 확인 가능</span>
+            <input type="text" id="nameA" placeholder="예: 국산 삼겹살 500g">
           </label>
-          <label class="field unit-field">
+
+          <label class="field">
             통화
-            <select id="currencyB">
+            <select id="currencyA">
               <option value="KRW">KRW ₩</option>
               <option value="JPY">JPY ¥</option>
               <option value="VND">VND ₫</option>
@@ -179,14 +112,47 @@
               <option value="EUR">EUR €</option>
             </select>
           </label>
+
+          <div class="field-row hidden" id="exchangeRateWrapA">
+            <label class="field">
+              환율 (1외화 = ?원)
+              <input type="number" id="exchangeRateA" inputmode="decimal" placeholder="예: 1350">
+            </label>
+            <div class="exrate-hint" id="exrateHintA"></div>
+          </div>
+
+          <div class="field-row hidden" id="weightPerUnitWrapA">
+            <label class="field">
+              1개당 무게(g) <span class="field-hint">— 고기·계란처럼 개수+무게 있는 상품용</span>
+              <input type="number" id="weightPerUnitA" inputmode="decimal" placeholder="예: 500">
+            </label>
+          </div>
+
+          <label class="field">
+            할인 조건
+            <select id="discountTypeA">
+              <option value="none">없음</option>
+              <option value="bundle">1+1 (묶음)</option>
+              <option value="percent">% 할인</option>
+            </select>
+          </label>
+          <button type="button" class="discount-more-btn" id="discountMoreBtnA">더보기 (정액할인 · 카드할인)</button>
+          <div class="discount-params" id="discountParamsA"></div>
+
         </div>
 
-        <div class="field-row hidden" id="exchangeRateWrapB">
+        <div class="live-price" id="liveA">값을 입력해주세요</div>
+      </div>
+
+      <div class="tag-card">
+        <span class="tag-hole" aria-hidden="true"></span>
+        <h2>상품 B</h2>
+
+        <div class="field-row">
           <label class="field">
-            환율 (1외화 = ?원)
-            <input type="number" id="exchangeRateB" inputmode="decimal" placeholder="예: 1350">
+            가격
+            <input type="number" id="priceB" inputmode="decimal" placeholder="예: 15000">
           </label>
-          <div class="exrate-hint" id="exrateHintB"></div>
         </div>
 
         <div class="field-row">
@@ -213,24 +179,74 @@
           </label>
         </div>
 
-        <div class="field-row hidden" id="weightPerUnitWrapB">
-          <label class="field">
-            1개당 무게(g) <span class="field-hint">— 고기·계란처럼 개수+무게 있는 상품용</span>
-            <input type="number" id="weightPerUnitB" inputmode="decimal" placeholder="예: 500">
-          </label>
-        </div>
+        <button type="button" class="advanced-toggle" id="advancedToggleB" aria-expanded="false" aria-controls="advancedPanelB">
+          <span class="advanced-toggle-icon">▾</span> 자세히 입력하기
+        </button>
 
-        <label class="field">
-          할인 조건
-          <select id="discountTypeB">
-            <option value="none">없음</option>
-            <option value="bundle">묶음 (예: 1+1)</option>
-            <option value="percent">정률 할인 (%)</option>
-            <option value="flat">정액 할인 (원)</option>
-            <option value="card">카드 조건부 할인</option>
-          </select>
-        </label>
-        <div class="discount-params" id="discountParamsB"></div>
+        <div class="advanced-panel hidden" id="advancedPanelB">
+
+          <div class="photo-block">
+            <button type="button" class="photo-btn" id="photoBtnB">📷 사진으로 입력</button>
+            <input type="file" accept="image/*" capture="environment" id="photoInputB" class="hidden">
+            <div class="photo-preview-wrap hidden" id="photoPreviewWrapB">
+              <img class="photo-preview" id="photoPreviewB" alt="촬영한 가격표 사진">
+              <div class="ocr-status" id="ocrStatusB"></div>
+              <div class="ocr-candidates" id="ocrCandidatesB"></div>
+            </div>
+          </div>
+
+          <label class="field">
+            상품명 <span class="field-hint">(선택) — 입력하면 온라인 최저가 확인 가능</span>
+            <input type="text" id="nameB" placeholder="예: 국산 삼겹살 500g">
+          </label>
+
+          <label class="field">
+            통화
+            <select id="currencyB">
+              <option value="KRW">KRW ₩</option>
+              <option value="JPY">JPY ¥</option>
+              <option value="VND">VND ₫</option>
+              <option value="THB">THB ฿</option>
+              <option value="CNY">CNY ¥</option>
+              <option value="TWD">TWD NT$</option>
+              <option value="PHP">PHP ₱</option>
+              <option value="IDR">IDR Rp</option>
+              <option value="USD">USD $</option>
+              <option value="SGD">SGD S$</option>
+              <option value="MYR">MYR RM</option>
+              <option value="CAD">CAD C$</option>
+              <option value="GBP">GBP £</option>
+              <option value="EUR">EUR €</option>
+            </select>
+          </label>
+
+          <div class="field-row hidden" id="exchangeRateWrapB">
+            <label class="field">
+              환율 (1외화 = ?원)
+              <input type="number" id="exchangeRateB" inputmode="decimal" placeholder="예: 1350">
+            </label>
+            <div class="exrate-hint" id="exrateHintB"></div>
+          </div>
+
+          <div class="field-row hidden" id="weightPerUnitWrapB">
+            <label class="field">
+              1개당 무게(g) <span class="field-hint">— 고기·계란처럼 개수+무게 있는 상품용</span>
+              <input type="number" id="weightPerUnitB" inputmode="decimal" placeholder="예: 500">
+            </label>
+          </div>
+
+          <label class="field">
+            할인 조건
+            <select id="discountTypeB">
+              <option value="none">없음</option>
+              <option value="bundle">1+1 (묶음)</option>
+              <option value="percent">% 할인</option>
+            </select>
+          </label>
+          <button type="button" class="discount-more-btn" id="discountMoreBtnB">더보기 (정액할인 · 카드할인)</button>
+          <div class="discount-params" id="discountParamsB"></div>
+
+        </div>
 
         <div class="live-price" id="liveB">값을 입력해주세요</div>
       </div>
