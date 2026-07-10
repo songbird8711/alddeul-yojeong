@@ -381,6 +381,48 @@ input[type=number]:focus, select:focus {
   color: var(--ink-soft);
 }
 
+/* ---- 자세히 입력하기 (고급옵션 접기) ---- */
+.advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: none;
+  border-top: 1px dashed var(--line);
+  padding: 10px 2px 2px;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
+  text-align: left;
+}
+.advanced-toggle:hover { color: var(--cheap-green); }
+.advanced-toggle-icon {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+.advanced-toggle[aria-expanded="true"] .advanced-toggle-icon { transform: rotate(180deg); }
+
+.advanced-panel {
+  margin-top: 10px;
+  padding-top: 2px;
+}
+
+.discount-more-btn {
+  display: inline-block;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: -6px 0 10px;
+  font-size: 11px;
+  color: var(--cheap-green);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.discount-more-btn:hover { color: var(--ink); }
+
 /* ---- 온라인 최저가 확인 ---- */
 .online-check { margin-top: 14px; }
 .online-hint {
