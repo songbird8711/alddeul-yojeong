@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v9'; // v8 -> v9: 루트 index.html이 advancedPanel 없이 배포되던 치명적 버그 수정 (js/ 폴더에 잘못 올라간 중복 파일 정리)
+const CACHE_NAME = 'alddeul-yojeong-v10'; // v9 -> v10: "오늘 장보기" 리스트(ESL 자동추가 프로토타입) 추가
 const ASSETS = [
   './index.html',
   './style.css',
