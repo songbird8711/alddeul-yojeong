@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v5'; // v4 -> v5: 네비게이션 요청을 네트워크 우선으로 전환 (재실행 시 "연결할 수 없음" 버그 수정)
+const CACHE_NAME = 'alddeul-yojeong-v7'; // v5 -> v7: 환율/통화 확장 + OCR 엔진을 Tesseract에서 PaddleOCR로 교체
 const ASSETS = [
   './index.html',
   './style.css',
