@@ -33,12 +33,15 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultSection = document.getElementById('result');
   const historyList = document.getElementById('historyList');
 
+  // Frankfurter API가 지원하지 않아 환율 자동 조회가 불가능한 통화 (직접 입력 필요)
+  const EXRATE_AUTO_UNSUPPORTED = ['VND', 'TWD'];
+
   const CURRENCY_SYMBOL = {
     KRW: '₩',
     JPY: '¥',
     VND: '₫',
     THB: '฿',
-    CNY: '¥',
+    CNY: '元',
     TWD: 'NT$',
     PHP: '₱',
     IDR: 'Rp',
@@ -65,17 +68,24 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- 환율이 자동으로 채워졌는지/오프라인 캐시인지 안내 문구 표시 ----
   function renderExrateHint(p) {
     if (!els[p].exrateHint) return;
-    const isKRW = els[p].currency.value === 'KRW';
+    const currency = els[p].currency.value;
+    const isKRW = currency === 'KRW';
     if (isKRW) {
       els[p].exrateHint.textContent = '';
       els[p].exrateHint.className = 'exrate-hint';
       return;
     }
+    if (EXRATE_AUTO_UNSUPPORTED.includes(currency)) {
+      els[p].exrateHint.textContent = '이 통화는 자동 환율 조회를 지원하지 않아요. 환율을 직접 입력해주세요.';
+      els[p].exrateHint.className = 'exrate-hint manual';
+      return;
+    }
     const cache = ExchangeRateStore.get();
-    if (ExchangeRateStore.isFresh(cache)) {
+    const hasRate = cache && cache.rates && cache.rates[currency] != null;
+    if (hasRate && ExchangeRateStore.isFresh(cache)) {
       els[p].exrateHint.textContent = '오늘 환율 자동 적용됨 (필요하면 직접 수정하세요)';
       els[p].exrateHint.className = 'exrate-hint auto';
-    } else if (cache) {
+    } else if (hasRate) {
       els[p].exrateHint.textContent = `⚠ ${cache.date} 기준 환율이에요 (오프라인이라 갱신 못함, 직접 수정 가능)`;
       els[p].exrateHint.className = 'exrate-hint stale';
     } else {
