@@ -251,6 +251,7 @@ input[type=number]:focus, select:focus {
 }
 .exrate-hint.auto { color: var(--cheap-green); }
 .exrate-hint.stale { color: var(--high-red); }
+.exrate-hint.manual { color: var(--ink-soft); font-style: italic; }
 
 .weekly-savings {
   margin-top: 24px;
