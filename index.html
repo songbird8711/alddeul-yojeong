@@ -258,7 +258,14 @@
 <script src="js/calculator.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/ocr.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script type="module">
+  // PaddleOCR(ppu-paddle-ocr) 브라우저 빌드를 CDN에서 불러와 전역(window)에 노출.
+  // jsdelivr의 +esm 변환을 사용해 onnxruntime-web 등 내부 의존성까지 브라우저에서 바로 동작하도록 번들링.
+  // app.js는 일반 스크립트라 이 모듈 스크립트가 먼저 끝난 뒤(DOMContentLoaded 전에) 실행되므로 순서 문제 없음.
+  import { PaddleOcrService, V5_KOREAN_MOBILE_MODEL } from 'https://cdn.jsdelivr.net/npm/ppu-paddle-ocr@6.0.0/web/+esm';
+  window.PaddleOcrService = PaddleOcrService;
+  window.PADDLE_KOREAN_MODEL = V5_KOREAN_MOBILE_MODEL;
+</script>
 <script src="js/app.js"></script>
 </body>
 </html>
