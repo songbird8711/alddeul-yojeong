@@ -510,7 +510,12 @@ document.addEventListener('DOMContentLoaded', () => {
       throw new Error('OCR 라이브러리를 아직 불러오지 못했어요. 잠시 후 다시 시도해주세요.');
     }
     ocrInitPromise = (async () => {
-      const service = new PaddleOcrService({ model: window.PADDLE_KOREAN_MODEL });
+      const service = new PaddleOcrService({
+        model: window.PADDLE_KOREAN_MODEL,
+        // 원인 진단용: 콘솔에 감지/인식 단계별 로그를 출력한다.
+        // (문제 원인이 확인되면 다시 꺼도 됨 — 성능에 큰 영향은 없지만 로그가 계속 쌓이는 건 지저분함)
+        debugging: { verbose: true },
+      });
       await service.initialize();
       ocrService = service;
       return service;
@@ -543,6 +548,145 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ---- ESL 영역 자동 감지 + 기울기 보정 (OpenCV.js) ----
+  // OCR 전에 라벨 영역만 찾아서 반듯하게 펴 놓으면 인식률이 크게 올라간다.
+  // 실패하면(라벨을 못 찾거나 OpenCV 자체가 안 불러와지면) 원본 사진을 그대로 반환해서
+  // 이 단계가 없던 것처럼 동작한다 — 즉 이 단계는 "있으면 좋고 없어도 되는" 보강 단계.
+  let cvReadyPromise = null;
+  function getOpenCv() {
+    if (cvReadyPromise) return cvReadyPromise;
+    cvReadyPromise = (async () => {
+      if (typeof cv === 'undefined') {
+        throw new Error('OpenCV 라이브러리를 아직 불러오지 못했어요.');
+      }
+      if (cv instanceof Promise) return await cv;
+      if (cv.Mat) return cv;
+      await new Promise((resolve) => { cv['onRuntimeInitialized'] = resolve; });
+      return cv;
+    })();
+    return cvReadyPromise;
+  }
+
+  // 감지된 4개 점을 [좌상단, 우상단, 우하단, 좌하단] 순서로 정렬
+  function orderCornerPoints(pts) {
+    const sums = pts.map((p) => p.x + p.y);
+    const diffs = pts.map((p) => p.x - p.y);
+    const tl = pts[sums.indexOf(Math.min(...sums))];
+    const br = pts[sums.indexOf(Math.max(...sums))];
+    const tr = pts[diffs.indexOf(Math.max(...diffs))];
+    const bl = pts[diffs.indexOf(Math.min(...diffs))];
+    return [tl, tr, br, bl];
+  }
+
+  function cornerMatToPoints(mat) {
+    const pts = [];
+    for (let i = 0; i < mat.rows; i++) {
+      pts.push({ x: mat.data32S[i * 2], y: mat.data32S[i * 2 + 1] });
+    }
+    return pts;
+  }
+
+  // 사진 안에서 사각형 라벨(ESL) 후보를 찾는다. 못 찾으면 null.
+  function detectEslQuad(cvLib, src) {
+    const gray = new cvLib.Mat();
+    const blurred = new cvLib.Mat();
+    const edged = new cvLib.Mat();
+    const kernel = cvLib.Mat.ones(3, 3, cvLib.CV_8U);
+    const dilated = new cvLib.Mat();
+    const contours = new cvLib.MatVector();
+    const hierarchy = new cvLib.Mat();
+    let best = null;
+
+    try {
+      cvLib.cvtColor(src, gray, cvLib.COLOR_RGBA2GRAY);
+      cvLib.GaussianBlur(gray, blurred, new cvLib.Size(5, 5), 0);
+      cvLib.Canny(blurred, edged, 50, 150);
+      cvLib.dilate(edged, dilated, kernel);
+      cvLib.findContours(dilated, contours, hierarchy, cvLib.RETR_LIST, cvLib.CHAIN_APPROX_SIMPLE);
+
+      let bestArea = 0;
+      const imgArea = src.rows * src.cols;
+      for (let i = 0; i < contours.size(); i++) {
+        const cnt = contours.get(i);
+        const peri = cvLib.arcLength(cnt, true);
+        const approx = new cvLib.Mat();
+        cvLib.approxPolyDP(cnt, approx, 0.02 * peri, true);
+        if (approx.rows === 4) {
+          const area = Math.abs(cvLib.contourArea(approx));
+          // 이미지 전체 면적의 5% 이상인 사각형만 "라벨 후보"로 인정 (너무 작은 잡음 제외)
+          if (area > imgArea * 0.05 && area > bestArea && cvLib.isContourConvex(approx)) {
+            bestArea = area;
+            if (best) best.delete();
+            best = approx.clone();
+          }
+        }
+        approx.delete();
+        cnt.delete();
+      }
+      return best;
+    } finally {
+      gray.delete(); blurred.delete(); edged.delete(); dilated.delete(); kernel.delete();
+      contours.delete(); hierarchy.delete();
+    }
+  }
+
+  /**
+   * 사진에서 ESL 라벨 영역을 찾아 기울기를 펴고 크롭한 새 캔버스를 반환한다.
+   * 라벨을 못 찾거나 OpenCV를 못 불러온 경우, 원본 캔버스를 그대로 반환한다(안전한 폴백).
+   */
+  async function detectAndCropEsl(canvas) {
+    let cvLib;
+    try {
+      cvLib = await getOpenCv();
+    } catch (e) {
+      console.warn('OpenCV를 불러오지 못해 원본 사진으로 진행합니다.', e);
+      return canvas;
+    }
+
+    let src = null;
+    let quad = null;
+    try {
+      src = cvLib.imread(canvas);
+      quad = detectEslQuad(cvLib, src);
+      if (!quad) {
+        console.log('[알뜰요정 ESL 감지] 라벨 영역을 못 찾아 원본 사진으로 진행합니다.');
+        return canvas;
+      }
+
+      const pts = cornerMatToPoints(quad);
+      const [tl, tr, br, bl] = orderCornerPoints(pts);
+
+      const widthA = Math.hypot(br.x - bl.x, br.y - bl.y);
+      const widthB = Math.hypot(tr.x - tl.x, tr.y - tl.y);
+      const maxWidth = Math.max(Math.round(Math.max(widthA, widthB)), 10);
+      const heightA = Math.hypot(tr.x - br.x, tr.y - br.y);
+      const heightB = Math.hypot(tl.x - bl.x, tl.y - bl.y);
+      const maxHeight = Math.max(Math.round(Math.max(heightA, heightB)), 10);
+
+      const srcTri = cvLib.matFromArray(4, 1, cvLib.CV_32FC2, [tl.x, tl.y, tr.x, tr.y, br.x, br.y, bl.x, bl.y]);
+      const dstTri = cvLib.matFromArray(4, 1, cvLib.CV_32FC2, [0, 0, maxWidth - 1, 0, maxWidth - 1, maxHeight - 1, 0, maxHeight - 1]);
+      const M = cvLib.getPerspectiveTransform(srcTri, dstTri);
+      const dst = new cvLib.Mat();
+      try {
+        cvLib.warpPerspective(src, dst, M, new cvLib.Size(maxWidth, maxHeight), cvLib.INTER_LINEAR, cvLib.BORDER_CONSTANT, new cvLib.Scalar());
+        const outCanvas = document.createElement('canvas');
+        outCanvas.width = maxWidth;
+        outCanvas.height = maxHeight;
+        cvLib.imshow(outCanvas, dst);
+        console.log(`[알뜰요정 ESL 감지] 라벨 영역 감지 및 보정 완료 (${maxWidth}x${maxHeight})`);
+        return outCanvas;
+      } finally {
+        srcTri.delete(); dstTri.delete(); M.delete(); dst.delete();
+      }
+    } catch (e) {
+      console.warn('ESL 영역 보정 중 오류가 발생해 원본 사진으로 진행합니다.', e);
+      return canvas;
+    } finally {
+      if (src) src.delete();
+      if (quad) quad.delete();
+    }
+  }
+
   function initPhotoOcr(p) {
     els[p].photoBtn.addEventListener('click', () => els[p].photoInput.click());
 
@@ -557,7 +701,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         const service = await getOcrService();
-        const canvas = await fileToCanvas(file);
+        const rawCanvas = await fileToCanvas(file);
+        const canvas = await detectAndCropEsl(rawCanvas);
         const result = await service.recognize(canvas);
         const text = result && result.text ? result.text : '';
         const analysis = OcrParser.analyze(text);
@@ -657,9 +802,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         const service = await getOcrService();
-        const canvas = await fileToCanvas(file);
+        const rawCanvas = await fileToCanvas(file);
+        const canvas = await detectAndCropEsl(rawCanvas);
         const result = await service.recognize(canvas);
         const text = result && result.text ? result.text : '';
+        // 진단용 로그: 인식 실패 시 콘솔에서 "OCR 원본 텍스트"가 비어있는지, 이상한 글자가 나오는지 확인 가능
+        console.log('[알뜰요정 OCR 진단] 원본 인식 텍스트:', JSON.stringify(text));
+        console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const extracted = OcrParser.autoExtract(text);
 
         if (!extracted.complete) {

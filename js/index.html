@@ -292,6 +292,9 @@
 <script src="js/calculator.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/ocr.js"></script>
+<!-- OpenCV.js: ESL 라벨 영역 자동 감지 + 기울기 보정용. 고전적인 <script> 태그로 로드되며
+     window.cv 전역을 노출한다(로드 직후엔 Promise일 수 있어 app.js에서 별도로 준비 대기 처리). -->
+<script src="https://cdn.jsdelivr.net/npm/@techstark/opencv-js@5.0.0-release.1/dist/opencv.js"></script>
 <script type="module">
   // PaddleOCR(ppu-paddle-ocr) 브라우저 빌드를 CDN에서 불러와 전역(window)에 노출.
   // jsdelivr의 +esm 변환을 사용해 onnxruntime-web 등 내부 의존성까지 브라우저에서 바로 동작하도록 번들링.
