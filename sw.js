@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v10'; // v9 -> v10: "오늘 장보기" 리스트(ESL 자동추가 프로토타입) 추가
+const CACHE_NAME = 'alddeul-yojeong-v11'; // v10 -> v11: OpenCV.js로 ESL 영역 자동감지+기울기보정 추가, OCR 진단 로그 추가
 const ASSETS = [
   './index.html',
   './style.css',
