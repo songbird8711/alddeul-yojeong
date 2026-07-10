@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
       photoPreview: document.getElementById(`photoPreview${p}`),
       ocrStatus: document.getElementById(`ocrStatus${p}`),
       ocrCandidates: document.getElementById(`ocrCandidates${p}`),
+      advancedToggle: document.getElementById(`advancedToggle${p}`),
+      advancedPanel: document.getElementById(`advancedPanel${p}`),
+      discountMoreBtn: document.getElementById(`discountMoreBtn${p}`),
     };
   });
 
@@ -116,6 +119,44 @@ document.addEventListener('DOMContentLoaded', () => {
   function toggleWeightPerUnit(p) {
     const isEa = els[p].unit.value === 'ea';
     els[p].weightPerUnitWrap.classList.toggle('hidden', !isEa);
+  }
+
+  // ---- 고급옵션(자세히 입력하기) 접기/펼치기 ----
+  function openAdvanced(p) {
+    els[p].advancedPanel.classList.remove('hidden');
+    els[p].advancedToggle.setAttribute('aria-expanded', 'true');
+    els[p].advancedToggle.innerHTML = '<span class="advanced-toggle-icon">▾</span> 접기';
+  }
+  function closeAdvanced(p) {
+    els[p].advancedPanel.classList.add('hidden');
+    els[p].advancedToggle.setAttribute('aria-expanded', 'false');
+    els[p].advancedToggle.innerHTML = '<span class="advanced-toggle-icon">▾</span> 자세히 입력하기';
+  }
+  function toggleAdvanced(p) {
+    const isOpen = els[p].advancedToggle.getAttribute('aria-expanded') === 'true';
+    if (isOpen) closeAdvanced(p);
+    else openAdvanced(p);
+  }
+  // 복원된 값 중에 "고급옵션" 항목(상품명/통화/할인/1개당무게)이 실제로 채워져 있으면
+  // 패널이 접힌 채로 있어서 사용자가 값이 반영된 걸 못 보고 지나치는 일이 없도록 자동으로 펼친다.
+  function maybeExpandAdvanced(p) {
+    const hasAdvancedValue =
+      (els[p].name.value && els[p].name.value.trim() !== '') ||
+      els[p].currency.value !== 'KRW' ||
+      els[p].discountType.value !== 'none' ||
+      els[p].unit.value === 'ea';
+    if (hasAdvancedValue) openAdvanced(p);
+  }
+
+  // ---- 할인 "더보기" — 기본 노출 3종(없음/1+1/%) 외에 정액할인/카드할인 옵션을 뒤늦게 추가 ----
+  function ensureDiscountMoreOptions(p) {
+    const select = els[p].discountType;
+    if (select.querySelector('option[value="flat"]')) return; // 이미 추가된 경우 중복 방지
+    select.insertAdjacentHTML(
+      'beforeend',
+      `<option value="flat">정액 할인 (원)</option><option value="card">카드 조건부 할인</option>`
+    );
+    if (els[p].discountMoreBtn) els[p].discountMoreBtn.classList.add('hidden');
   }
 
   // ---- 할인 유형별 추가 입력 필드 렌더링 ----
@@ -216,6 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
     els[p].amount.value = numOrEmpty(input.amount);
     els[p].unit.value = input.unit || 'g';
     els[p].currency.value = input.currency || 'KRW';
+    if (input.discountType === 'flat' || input.discountType === 'card') ensureDiscountMoreOptions(p);
     els[p].discountType.value = input.discountType || 'none';
 
     toggleExchangeRate(p);
@@ -227,6 +269,7 @@ document.addEventListener('DOMContentLoaded', () => {
     fillDiscountParamInputs(p, input.discountType, input.discountParams, input.useCard);
 
     liveUpdate(p);
+    maybeExpandAdvanced(p);
   }
 
   function saveLastDiscountPref(p) {
@@ -288,6 +331,9 @@ document.addEventListener('DOMContentLoaded', () => {
       saveLastDiscountPref(p);
       liveUpdate(p);
     });
+    els[p].advancedToggle.addEventListener('click', () => toggleAdvanced(p));
+    els[p].discountMoreBtn.addEventListener('click', () => ensureDiscountMoreOptions(p));
+
     toggleExchangeRate(p);
     toggleWeightPerUnit(p);
     renderDiscountParams(p);
@@ -305,10 +351,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const prefs = PrefsStore.get();
     if (prefs.lastDiscount && prefs.lastDiscount.type && prefs.lastDiscount.type !== 'none') {
       ['A', 'B'].forEach((p) => {
+        if (prefs.lastDiscount.type === 'flat' || prefs.lastDiscount.type === 'card') ensureDiscountMoreOptions(p);
         els[p].discountType.value = prefs.lastDiscount.type;
         renderDiscountParams(p);
         fillDiscountParamInputs(p, prefs.lastDiscount.type, prefs.lastDiscount.params, prefs.lastDiscount.useCard);
         liveUpdate(p);
+        maybeExpandAdvanced(p);
       });
     }
   }
@@ -421,6 +469,15 @@ document.addEventListener('DOMContentLoaded', () => {
     els[p].photoPreview.src = '';
     els[p].ocrCandidates.innerHTML = '';
     els[p].ocrStatus.textContent = '';
+
+    // 할인 "더보기"로 추가됐던 정액/카드 옵션 제거 + 버튼 다시 노출
+    const flatOpt = els[p].discountType.querySelector('option[value="flat"]');
+    const cardOpt = els[p].discountType.querySelector('option[value="card"]');
+    if (flatOpt) flatOpt.remove();
+    if (cardOpt) cardOpt.remove();
+    if (els[p].discountMoreBtn) els[p].discountMoreBtn.classList.remove('hidden');
+
+    closeAdvanced(p);
     liveUpdate(p);
   }
 
