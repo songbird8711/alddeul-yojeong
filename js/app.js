@@ -4,6 +4,63 @@
 document.addEventListener('DOMContentLoaded', () => {
   const products = ['A', 'B'];
 
+  // ---- [임시 진단용] OCR 결과를 devtools 없이 화면에서 바로 보고 복사할 수 있는 오버레이 ----
+  // 정확도 검증이 끝나면 이 블록과 호출부만 지우면 원상복구됩니다.
+  function showOcrDebugOverlay(title, payload) {
+    let box = document.getElementById('ocrDebugOverlay');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'ocrDebugOverlay';
+      box.style.cssText = [
+        'position:fixed', 'left:8px', 'right:8px', 'bottom:8px',
+        'max-height:45vh', 'overflow:auto', 'z-index:9999',
+        'background:#0c0c0c', 'color:#7CFC7C', 'font-family:monospace',
+        'font-size:11px', 'line-height:1.5', 'padding:10px',
+        'border-radius:10px', 'box-shadow:0 4px 20px rgba(0,0,0,0.4)',
+        'white-space:pre-wrap', 'word-break:break-all',
+      ].join(';');
+      document.body.appendChild(box);
+    }
+
+    let text;
+    try {
+      text = JSON.stringify(payload, null, 2);
+    } catch (e) {
+      text = String(payload) + '\n(직렬화 실패: ' + e.message + ')';
+    }
+    const fullText = `[알뜰요정 OCR 진단 - ${title}]\n${text}`;
+
+    box.innerHTML = '';
+    const pre = document.createElement('div');
+    pre.textContent = fullText;
+    box.appendChild(pre);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = '📋 복사';
+    copyBtn.style.cssText = 'flex:1;padding:8px;background:#1E7F4C;color:#fff;border:none;border-radius:6px;font-size:12px;';
+    copyBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(fullText);
+        copyBtn.textContent = '✅ 복사됨!';
+        setTimeout(() => { copyBtn.textContent = '📋 복사'; }, 1500);
+      } catch (e) {
+        copyBtn.textContent = '복사 실패 — 길게 눌러서 직접 복사해주세요';
+      }
+    };
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '닫기';
+    closeBtn.style.cssText = 'padding:8px 12px;background:#333;color:#fff;border:none;border-radius:6px;font-size:12px;';
+    closeBtn.onclick = () => box.remove();
+
+    btnRow.appendChild(copyBtn);
+    btnRow.appendChild(closeBtn);
+    box.appendChild(btnRow);
+  }
+
   const els = {};
   products.forEach((p) => {
     els[p] = {
@@ -711,9 +768,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const analysis = OcrParser.analyze(text);
         console.log('[알뜰요정 OCR 진단] 파싱된 후보값:', analysis);
+        showOcrDebugOverlay(`상품${p} 카드`, { 원본텍스트: text, 파싱결과: analysis });
         renderOcrCandidates(p, analysis);
       } catch (err) {
         console.error('OCR 오류:', err);
+        showOcrDebugOverlay(`상품${p} 카드 - 실패`, { 에러메시지: err && err.message, 스택: err && err.stack });
         setOcrStatus(p, '인식하지 못했어요. 직접 입력해주세요.', 'error');
       }
     });
@@ -867,6 +926,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const extracted = OcrParser.autoExtract(text);
         console.log('[알뜰요정 OCR 진단] 자동추출 결과:', extracted);
+        showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted });
 
         if (!extracted.complete) {
           showErrorToast('가격이나 용량을 읽지 못했어요. 다시 촬영해주세요.');
@@ -901,6 +961,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       } catch (err) {
         console.error('ESL 자동추가 오류:', err);
+        showOcrDebugOverlay('오늘 장보기(ESL) - 실패', { 에러메시지: err && err.message, 스택: err && err.stack });
         showErrorToast('인식에 실패했어요. 다시 촬영해주세요.');
       } finally {
         captureBtn.disabled = false;
