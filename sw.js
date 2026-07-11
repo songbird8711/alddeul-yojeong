@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v17'; // v16 -> v17: 가격 파싱 마침표(.) 구분자 대응 + 그레이스케일 전처리 추가 + 진단오버레이에 전체결과객체 표시
+const CACHE_NAME = 'alddeul-yojeong-v18'; // v17 -> v18: OCR 가격추출을 신뢰도/박스단위 기반으로 재설계(바코드 오인식 방지) + 라벨형식 힌트 추가
 const ASSETS = [
   './index.html',
   './style.css',
