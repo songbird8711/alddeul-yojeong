@@ -30,24 +30,32 @@
   </header>
 
   <main>
-    <div class="toolbar">
-      <button type="button" class="toolbar-btn" id="swapBtn">🔄 A↔B 바꾸기</button>
-      <button type="button" class="toolbar-btn" id="resetBtn">🗑️ 초기화</button>
+    <div id="listView">
+      <section class="shopping-list-section" aria-label="오늘 장보기">
+        <div class="list-header">
+          <h2>🧚 오늘 장보기</h2>
+          <div class="list-header-actions">
+            <button type="button" class="list-compare-entry-btn" id="compareEntryBtn">🔍 상품 비교하기</button>
+            <button type="button" class="list-clear-btn" id="listClearBtn">비우기</button>
+          </div>
+        </div>
+
+        <button type="button" class="esl-capture-btn" id="eslCaptureBtn">📷 ESL 촬영해서 담기</button>
+        <input type="file" accept="image/*" capture="environment" id="eslCaptureInput" class="hidden">
+
+        <div class="list-total" id="listTotal">담은 상품이 없어요</div>
+
+        <ul class="shopping-list" id="shoppingList"></ul>
+      </section>
     </div>
 
-    <section class="shopping-list-section" aria-label="오늘 장보기">
-      <div class="list-header">
-        <h2>🧚 오늘 장보기 <span class="beta-badge">베타</span></h2>
-        <button type="button" class="list-clear-btn" id="listClearBtn">비우기</button>
+    <div id="compareView" class="hidden">
+      <button type="button" class="back-to-list-btn" id="backToListBtn">← 오늘 장보기로 돌아가기</button>
+
+      <div class="toolbar">
+        <button type="button" class="toolbar-btn" id="swapBtn">🔄 A↔B 바꾸기</button>
+        <button type="button" class="toolbar-btn" id="resetBtn">🗑️ 초기화</button>
       </div>
-
-      <button type="button" class="esl-capture-btn" id="eslCaptureBtn">📷 ESL 촬영해서 담기</button>
-      <input type="file" accept="image/*" capture="environment" id="eslCaptureInput" class="hidden">
-
-      <div class="list-total" id="listTotal">담은 상품이 없어요</div>
-
-      <ul class="shopping-list" id="shoppingList"></ul>
-    </section>
 
     <section class="products" aria-label="상품 입력">
 
@@ -275,18 +283,56 @@
       <h2>최근 비교 기록 <span class="history-limit">(최근 30일, 이 기기에만 저장 · 탭하면 다시 불러와요)</span></h2>
       <ul id="historyList"></ul>
     </section>
+    </div>
   </main>
 
   <footer class="app-footer">알뜰요정 · 다음 업데이트: 게임 효율 계산기</footer>
 </div>
 
-<div class="compare-bar">
+<div class="compare-bar hidden" id="compareBar">
   <button id="compareBtn" class="stamp-button">비교하기</button>
 </div>
 
 <div class="add-toast hidden" id="addToast">
   <span id="addToastText"></span>
   <button type="button" id="addToastUndoBtn">취소</button>
+</div>
+
+<div class="confirm-add-overlay hidden" id="confirmAddCard">
+  <div class="confirm-add-card">
+    <h3>담을 상품 확인</h3>
+    <img id="confirmAddThumb" class="confirm-add-thumb" alt="촬영한 사진">
+    <label class="field">
+      상품명
+      <input type="text" id="confirmName" placeholder="예: 한우 불고기">
+    </label>
+    <div class="confirm-add-row">
+      <label class="field">
+        가격(원)
+        <input type="number" id="confirmPrice" inputmode="decimal">
+      </label>
+      <label class="field">
+        용량/수량
+        <input type="number" id="confirmAmount" inputmode="decimal">
+      </label>
+      <label class="field unit-field">
+        단위
+        <select id="confirmUnit">
+          <option value="g">g</option>
+          <option value="kg">kg</option>
+          <option value="ml">ml</option>
+          <option value="l">L</option>
+          <option value="ea">개</option>
+        </select>
+      </label>
+    </div>
+    <div class="confirm-add-preview" id="confirmPreview"></div>
+    <div class="confirm-add-actions">
+      <button type="button" class="confirm-add-btn" id="confirmAddBtn">✓ 담기</button>
+      <button type="button" class="confirm-retake-btn" id="confirmRetakeBtn">🔄 다시 촬영</button>
+      <button type="button" class="confirm-cancel-btn" id="confirmCancelBtn">취소</button>
+    </div>
+  </div>
 </div>
 
 <script src="js/calculator.js"></script>

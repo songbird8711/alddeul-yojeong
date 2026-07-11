@@ -678,3 +678,119 @@ input[type=number]:focus, select:focus {
   cursor: pointer;
 }
 .add-toast button:hover { background: rgba(255,255,255,0.3); }
+
+/* ---- 화면 전환 (오늘 장보기 <-> 상품 비교) ---- */
+.list-header-actions { display: flex; gap: 6px; }
+.list-compare-entry-btn {
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.list-compare-entry-btn:hover { color: var(--ink); border-color: var(--ink); }
+
+.back-to-list-btn {
+  display: block;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+}
+.back-to-list-btn:hover { color: var(--ink); }
+
+.list-item-compare {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  padding: 6px;
+  cursor: pointer;
+}
+.list-item-compare:hover { color: var(--ink); border-color: var(--ink-soft); }
+
+/* ---- 확인 후 담기 카드 ---- */
+.confirm-add-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+.confirm-add-card {
+  width: 100%;
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+  background: #fff;
+  border-radius: 16px 16px 0 0;
+  padding: 20px;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.3);
+}
+.confirm-add-card h3 { margin: 0 0 12px; font-size: 17px; }
+.confirm-add-thumb {
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+}
+.confirm-add-card .field { display: block; margin-bottom: 10px; font-size: 12px; color: var(--ink-soft); }
+.confirm-add-card .field input,
+.confirm-add-card .field select {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 10px;
+  font-size: 15px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+.confirm-add-row { display: flex; gap: 8px; }
+.confirm-add-row .field { flex: 1; min-width: 0; }
+.confirm-add-preview {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--cheap-green);
+  padding: 10px;
+  background: var(--paper);
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+.confirm-add-preview.error { color: var(--high-red); font-weight: 600; }
+.confirm-add-actions { display: flex; flex-direction: column; gap: 8px; }
+.confirm-add-btn {
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--cheap-green);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.confirm-retake-btn, .confirm-cancel-btn {
+  padding: 10px;
+  font-size: 13px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.confirm-retake-btn:hover, .confirm-cancel-btn:hover { color: var(--ink); border-color: var(--ink); }

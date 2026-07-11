@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v18'; // v17 -> v18: OCR 가격추출을 신뢰도/박스단위 기반으로 재설계(바코드 오인식 방지) + 라벨형식 힌트 추가
+const CACHE_NAME = 'alddeul-yojeong-v19'; // v18 -> v19: 화면을 "오늘 장보기" 중심으로 재편(A/B 비교는 보조기능화) + ESL 완전자동추가를 "확인 후 담기"로 전환
 const ASSETS = [
   './index.html',
   './style.css',
