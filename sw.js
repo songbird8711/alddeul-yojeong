@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v11'; // v10 -> v11: OpenCV.js로 ESL 영역 자동감지+기울기보정 추가, OCR 진단 로그 추가
+const CACHE_NAME = 'alddeul-yojeong-v12'; // v11 -> v12: ESL 자동추가 시 온라인 최저가 백그라운드 자동조회 추가
 const ASSETS = [
   './index.html',
   './style.css',
