@@ -74,6 +74,19 @@ document.addEventListener('DOMContentLoaded', () => {
     box.appendChild(btnRow);
   }
 
+  // 촬영 버튼 아래에 "라벨 하나만 화면 중앙에 크게" 안내문구를 한 번만 삽입한다.
+  // (커스텀 카메라 화면이 아니라 OS 기본 카메라 앱을 그대로 쓰는 구조라, 촬영 중 실시간 가이드
+  //  박스를 보여줄 수 없다 — 그래서 촬영 "전" 문구 안내로 대신한다. 크롭 로직도 이 전제로 중앙만 잘라낸다.)
+  function addCenterHintOnce(afterEl) {
+    if (!afterEl || !afterEl.parentElement) return;
+    if (afterEl.dataset.centerHintAdded === '1') return;
+    afterEl.dataset.centerHintAdded = '1';
+    const hint = document.createElement('div');
+    hint.textContent = '💡 라벨 하나만 화면 중앙에 크게 맞춰서 찍어주세요 (옆 라벨이 같이 나오면 인식이 잘 안 돼요)';
+    hint.style.cssText = 'font-size:11px;color:var(--ink-soft,#55524A);text-align:center;margin-top:6px;';
+    afterEl.insertAdjacentElement('afterend', hint);
+  }
+
   const els = {};
   products.forEach((p) => {
     els[p] = {
@@ -637,6 +650,23 @@ document.addEventListener('DOMContentLoaded', () => {
     return cvReadyPromise;
   }
 
+  // 사진 중앙 영역만 1차로 잘라낸다. 사용자가 라벨을 화면 중앙에 맞춰 찍는다는 전제로,
+  // 옆에 붙어있는 다른 태그나 위/아래 배경 상품 글자가 OCR 검색 범위에 아예 안 들어오게 막는 역할.
+  // (실제 사진 3장 검증 결과, 인접 태그/배경 글자가 섞여 들어오는 게 가장 큰 실패 원인이었음)
+  function cropToCenterRegion(canvas, widthRatio = 0.7, heightRatio = 0.55) {
+    const cw = canvas.width;
+    const ch = canvas.height;
+    const outW = Math.max(1, Math.round(cw * widthRatio));
+    const outH = Math.max(1, Math.round(ch * heightRatio));
+    const x = Math.round((cw - outW) / 2);
+    const y = Math.round((ch - outH) / 2);
+    const out = document.createElement('canvas');
+    out.width = outW;
+    out.height = outH;
+    out.getContext('2d').drawImage(canvas, x, y, outW, outH, 0, 0, outW, outH);
+    return out;
+  }
+
   // 감지된 4개 점을 [좌상단, 우상단, 우하단, 좌하단] 순서로 정렬
   function orderCornerPoints(pts) {
     const sums = pts.map((p) => p.x + p.y);
@@ -705,22 +735,25 @@ document.addEventListener('DOMContentLoaded', () => {
    * 라벨을 못 찾거나 OpenCV를 못 불러온 경우, 원본 캔버스를 그대로 반환한다(안전한 폴백).
    */
   async function detectAndCropEsl(canvas) {
+    // 1차: 중앙 영역만 남긴다 (인접 태그·배경 글자 원천 차단). 실패해도 이 결과가 최소 폴백이 된다.
+    const centerCanvas = cropToCenterRegion(canvas, 0.7, 0.55);
+
     let cvLib;
     try {
       cvLib = await getOpenCv();
     } catch (e) {
-      console.warn('OpenCV를 불러오지 못해 원본 사진으로 진행합니다.', e);
-      return canvas;
+      console.warn('OpenCV를 불러오지 못해 중앙 크롭 사진으로 진행합니다.', e);
+      return centerCanvas;
     }
 
     let src = null;
     let quad = null;
     try {
-      src = cvLib.imread(canvas);
+      src = cvLib.imread(centerCanvas);
       quad = detectEslQuad(cvLib, src);
       if (!quad) {
-        console.log('[알뜰요정 ESL 감지] 라벨 영역을 못 찾아 원본 사진으로 진행합니다.');
-        return canvas;
+        console.log('[알뜰요정 ESL 감지] 라벨 영역을 못 찾아 중앙 크롭 사진으로 진행합니다.');
+        return centerCanvas;
       }
 
       const pts = cornerMatToPoints(quad);
@@ -749,8 +782,8 @@ document.addEventListener('DOMContentLoaded', () => {
         srcTri.delete(); dstTri.delete(); M.delete(); dst.delete();
       }
     } catch (e) {
-      console.warn('ESL 영역 보정 중 오류가 발생해 원본 사진으로 진행합니다.', e);
-      return canvas;
+      console.warn('ESL 영역 보정 중 오류가 발생해 중앙 크롭 사진으로 진행합니다.', e);
+      return centerCanvas;
     } finally {
       if (src) src.delete();
       if (quad) quad.delete();
@@ -758,6 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function initPhotoOcr(p) {
+    addCenterHintOnce(els[p].photoBtn);
     els[p].photoBtn.addEventListener('click', () => els[p].photoInput.click());
 
     els[p].photoInput.addEventListener('change', async (e) => {
@@ -919,6 +953,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const captureInput = document.getElementById('eslCaptureInput');
     const clearBtn = document.getElementById('listClearBtn');
 
+    addCenterHintOnce(captureBtn);
     captureBtn.addEventListener('click', () => captureInput.click());
 
     captureInput.addEventListener('change', async (e) => {
