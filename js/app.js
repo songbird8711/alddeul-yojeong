@@ -705,7 +705,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const canvas = await detectAndCropEsl(rawCanvas);
         const result = await service.recognize(canvas);
         const text = result && result.text ? result.text : '';
+        // 원인 진단용: 실제 마트 사진에서 PaddleOCR이 뭘 반환하는지 그대로 남긴다.
+        // (정확도 검증이 끝나면 지워도 되지만, 당분간은 유지 — 문제 재현에 필요)
+        console.log('[알뜰요정 OCR 진단] 원본 인식 텍스트:', JSON.stringify(text));
+        console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const analysis = OcrParser.analyze(text);
+        console.log('[알뜰요정 OCR 진단] 파싱된 후보값:', analysis);
         renderOcrCandidates(p, analysis);
       } catch (err) {
         console.error('OCR 오류:', err);
@@ -861,6 +866,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 원본 인식 텍스트:', JSON.stringify(text));
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const extracted = OcrParser.autoExtract(text);
+        console.log('[알뜰요정 OCR 진단] 자동추출 결과:', extracted);
 
         if (!extracted.complete) {
           showErrorToast('가격이나 용량을 읽지 못했어요. 다시 촬영해주세요.');
