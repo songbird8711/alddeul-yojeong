@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v13'; // v12 -> v13: OCR 진단 오버레이 추가(devtools 없이 화면에서 원본 인식결과 확인)
+const CACHE_NAME = 'alddeul-yojeong-v15'; // v14 -> v15: OCR 가격 파싱 버그 수정(콤마가 공백으로 읽히는 경우 숫자 재결합)
 const ASSETS = [
   './index.html',
   './style.css',
