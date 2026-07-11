@@ -1,50 +1,190 @@
 // ocr.js
-// Tesseract.js가 반환한 텍스트에서 "가격 후보"와 "용량 후보"를 뽑아내는 순수 함수 모음.
-// DOM이나 Tesseract 자체를 몰라도 되게 분리 — 나중에 다른 OCR 엔진으로 바꿔도 이 파일만 교체하면 됨.
+// PaddleOCR이 반환한 결과에서 "가격 후보"와 "용량 후보"를 뽑아내는 순수 함수 모음.
+// DOM이나 OCR 엔진 자체를 몰라도 되게 분리 — 나중에 다른 OCR 엔진으로 바꿔도 이 파일만 교체하면 됨.
+//
+// [v2 변경사항 - 실제 마트/정육점 사진 검증 후 재설계]
+// 예전엔 result.text(줄바꿈으로 합쳐진 문자열) 하나만 놓고 정규식으로 숫자를 뽑았다.
+// 문제: "가장 큰 숫자 = 가격"으로 가정했는데, 실제로는 바코드 숫자 조각이 우연히 더 큰 값으로
+// 조합되면 그게 가격으로 잘못 뽑히는 사고가 실측 데이터에서 확인됐다
+// (정육점 라벨 예시: 진짜 가격 11740원 대신 바코드 조각으로 만들어진 20012가 뽑힘).
+//
+// 새 방식은 PaddleOCR이 텍스트마다 같이 주는 인식 신뢰도(confidence)와 박스 크기(box.height)를
+// 활용한다. 처음엔 "글자가 큰 후보 우선"으로 설계했는데, 실측 데이터에서 이력번호처럼 얇고 긴
+// 텍스트의 bounding box가 비정상적으로 크게 잡히는 경우가 나와 글자 크기만으로는 신뢰할 수
+// 없었다. 대신 신뢰도가 훨씬 안정적인 신호였다 — 실측 라벨에서 진짜 가격의 인식 신뢰도가
+// 전체 텍스트 중 가장 높게 나오는 경향이 뚜렷했다(정육점 라벨 예시: 진짜 가격 11740원의
+// 신뢰도 0.945가 라벨 전체에서 최고값). 그래서 신뢰도를 1차 기준, 글자 크기를 2차(신뢰도가
+// 오차범위 내로 비슷할 때만) 기준으로 쓴다.
+//
+// 라벨 형식(ESL 디지털 태그 vs 정육점/수산 구조화 라벨)에 따라 파싱 로직 자체를 분기하는 것도
+// 검토했지만, 위 "글자 크기 우선" 방식이 형식과 무관하게 잘 통해서 분기를 두지 않기로 했다.
+// 대신 라벨 형식 감지는 카테고리 자동 추정(육류/수산 등)에만 참고용으로 쓴다 — detectLabelHint 참고.
 
 const OcrParser = (() => {
 
   const WEIGHT_VOLUME_UNITS = ['kg', 'g', 'lb', 'oz', 'ml', 'l'];
+  const PRICE_KEYWORDS = ['가격', '판매가', '단가', '특가', '행사가'];
+  const BUTCHER_KEYWORDS = ['중량', '가격', '원산지', '포장', '소비기한', '이력', '도축장'];
 
-  /**
-   * 통화 표시가 붙은 숫자를 가격 후보로 추출한다.
-   * 우선순위: "원"/₩ 표시가 붙은 것 우선, 없으면 3자리 이상 숫자를 fallback으로 사용.
-   *
-   * [수정 1] 콤마(,) 자리가 OCR에서 공백으로 잘못 읽히는 경우가 실제로 자주 있다
-   * (예: "3,580" -> "3 580"). 원래는 콤마만 구분자로 인정해서 이런 경우 앞자리(3)가
-   * 통째로 버려지고 뒷자리(580)만 가격으로 잘못 뽑혔다. 공백도 같은 자리의 구분자로 허용했다.
-   * [수정 2] 실제 데이터에서 콤마가 마침표(.)로 오인식되는 경우도 나왔다
-   * (예: "8,980" -> "8.980"). 마침표도 같은 자리 구분자로 추가 허용한다.
-   * 단, 줄바꿈(\n)까지 구분자로 인정하면 서로 무관한 숫자를 잘못 이어붙일 위험이 있어
-   * 공백/콤마/마침표만 허용하고 줄바꿈은 제외한다.
-   */
-  function extractPriceCandidates(text) {
-    const found = new Map(); // value -> raw
-
-    // 콤마/공백/마침표로 3자리씩 묶인 숫자는 자릿수 제한 없음(정상적인 가격 표기 방식이라 안전).
-    // 구분자 없는 숫자는 3~6자리까지만 허용 — 장보기 가격은 보통 이 범위(최대 99만원대)라
-    // 바코드처럼 7자리 이상 길게 이어지는 숫자가 "가격"으로 오인식되는 것을 막는다.
+  // ---------------------------------------------------------------
+  // 레거시 경로: 구조화된 result(lines/box/confidence)가 없을 때 쓰는
+  // 순수 텍스트 기반 추출. (구버전 OCR 엔진 호환용, 테스트용으로도 사용)
+  // ---------------------------------------------------------------
+  function extractPriceCandidatesFromText(text) {
+    const found = new Map();
+    // 콤마(,) 자리가 OCR에서 공백이나 마침표로 잘못 읽히는 경우가 실제로 있어(예: "3,580"->"3 580"
+    // 또는 "8,980"->"8.980") 세 구분자를 모두 허용한다. 줄바꿈은 무관한 숫자를 잘못 이어붙일
+    // 위험이 있어 제외.
     const markedRe = /(?:₩\s?)?(\d{1,3}(?:[,. ]\d{3})+|(?<!\d)\d{3,6}(?!\d))\s?원?/g;
     let m;
     while ((m = markedRe.exec(text)) !== null) {
       const raw = m[0].trim();
       const value = parseInt(m[1].replace(/[,. ]/g, ''), 10);
       if (!isNaN(value) && value > 0) {
-        found.set(value, raw);
+        found.set(value, { value, raw, confidence: null, maxHeight: null, hasWonSuffix: /원/.test(raw) });
       }
     }
+    return Array.from(found.values())
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }
 
-    return Array.from(found.entries())
-      .map(([value, raw]) => ({ value, raw }))
-      .sort((a, b) => b.value - a.value) // 큰 금액(보통 정가)이 먼저 오도록 정렬
-      .slice(0, 6); // 후보가 너무 많으면 UI가 지저분해지므로 상위 6개까지만
+  // ---------------------------------------------------------------
+  // 신규 경로: PaddleOCR의 구조화 결과(result.lines: 줄 배열의 배열, 각 항목이
+  // { text, box:{x,y,width,height}, confidence })를 박스 단위로 분석한다.
+  // ---------------------------------------------------------------
+  function flattenBoxes(lines) {
+    const boxes = [];
+    (lines || []).forEach((lineArr, lineIndex) => {
+      (lineArr || []).forEach((box) => {
+        if (box && typeof box.text === 'string' && box.text.trim() !== '') {
+          boxes.push({ text: box.text.trim(), box: box.box || {}, confidence: typeof box.confidence === 'number' ? box.confidence : 0, lineIndex });
+        }
+      });
+    });
+    return boxes;
+  }
+
+  function isNumericish(t) {
+    return /^[\d,.\s]+$/.test(t) && /\d/.test(t);
+  }
+
+  // 두 박스가 "OCR이 원래 하나였던 숫자를 둘로 쪼갠 것"으로 볼 만큼 가깝고 크기가 비슷한지.
+  // (같은 줄 + 수평으로 붙어있음 + 글자 높이가 비슷함 — 바코드처럼 여러 다른 글자가
+  //  우연히 붙어있는 경우와 구분하기 위한 최소한의 안전장치. 완벽하지는 않다.)
+  function looksLikeSplitNumber(a, b) {
+    if (a.lineIndex !== b.lineIndex) return false;
+    const ah = a.box.height || 0;
+    const bh = b.box.height || 0;
+    if (!ah || !bh) return false;
+    const heightDiff = Math.abs(ah - bh) / Math.max(ah, bh);
+    if (heightDiff > 0.35) return false; // 글자 크기가 35% 넘게 다르면 같은 숫자였을 가능성 낮음
+    const gap = (b.box.x || 0) - ((a.box.x || 0) + (a.box.width || 0));
+    const avgHeight = (ah + bh) / 2;
+    return gap >= -avgHeight * 0.3 && gap <= avgHeight * 1.0;
+  }
+
+  function hasNearbyKeyword(boxes, targetBox, keywords, maxLineDistance = 2) {
+    return boxes.some((b) => {
+      if (Math.abs(b.lineIndex - targetBox.lineIndex) > maxLineDistance) return false;
+      return keywords.some((kw) => b.text.replace(/\s/g, '').includes(kw));
+    });
+  }
+
+  function extractPriceCandidatesFromBoxes(boxes) {
+    const candidates = [];
+
+    const numericBoxes = boxes.filter((b) => isNumericish(b.text));
+
+    numericBoxes.forEach((b, i) => {
+      // 1) 박스 하나만으로 이미 유효한 가격 형태인 경우 (예: "1,780", "11740")
+      const single = parsePriceString(b.text);
+      if (single != null) {
+        candidates.push({
+          value: single,
+          raw: b.text,
+          confidence: b.confidence,
+          maxHeight: b.box.height || 0,
+          hasWonSuffix: hasNearbyKeyword(boxes, b, ['원'], 0),
+          hasKeywordAnchor: hasNearbyKeyword(boxes, b, PRICE_KEYWORDS),
+        });
+      }
+
+      // 2) 바로 다음 숫자 박스와 합쳤을 때 유효한 경우 (OCR이 한 숫자를 둘로 쪼갠 케이스)
+      const next = numericBoxes[i + 1];
+      if (next && looksLikeSplitNumber(b, next)) {
+        const merged = parsePriceString(`${b.text} ${next.text}`);
+        if (merged != null) {
+          candidates.push({
+            value: merged,
+            raw: `${b.text} ${next.text}`,
+            confidence: Math.min(b.confidence, next.confidence), // 약한 쪽 기준(보수적으로)
+            maxHeight: Math.max(b.box.height || 0, next.box.height || 0),
+            hasWonSuffix: hasNearbyKeyword(boxes, next, ['원'], 0),
+            hasKeywordAnchor: hasNearbyKeyword(boxes, b, PRICE_KEYWORDS),
+          });
+        }
+      }
+    });
+
+    // 값 기준으로 중복 제거하되, 같은 값이면 더 신뢰도 높은/글자 큰 쪽을 남긴다.
+    const byValue = new Map();
+    candidates.forEach((c) => {
+      const existing = byValue.get(c.value);
+      if (!existing || c.maxHeight > existing.maxHeight || (c.maxHeight === existing.maxHeight && c.confidence > existing.confidence)) {
+        byValue.set(c.value, c);
+      }
+    });
+
+    return Array.from(byValue.values())
+      .sort((a, b) => {
+        // 키워드 근처("가격" 등)에 있는 후보를 최우선
+        if (a.hasKeywordAnchor !== b.hasKeywordAnchor) return a.hasKeywordAnchor ? -1 : 1;
+        // 그 다음 인식 신뢰도 — 박스 크기(글자 크기)는 이력번호 등에서 비정상적으로 크게
+        // 잡히는 경우가 실제로 발견되어(예: 얇고 긴 텍스트가 큰 bounding box로 잡힘) 1차
+        // 기준으로 쓰기엔 노이즈가 있었다. 신뢰도가 훨씬 안정적이었다 — 실측 데이터에서
+        // 진짜 가격의 신뢰도가 라벨 전체를 통틀어 가장 높게 나온 경우가 많았다.
+        if (Math.abs(b.confidence - a.confidence) > 0.02) return b.confidence - a.confidence;
+        // 신뢰도가 거의 같으면(오차범위 내) 글자 크기로 판단
+        if (b.maxHeight !== a.maxHeight) return b.maxHeight - a.maxHeight;
+        // 마지막으로 숫자 크기
+        return b.value - a.value;
+      })
+      .slice(0, 6);
+  }
+
+  // 문자열 하나에서 가격을 파싱한다(박스 내부용 — 이미 한 박스 안에 있는 텍스트라
+  // 줄바꿈 걱정 없이 공백/콤마/마침표를 구분자로 허용해도 안전하다).
+  function parsePriceString(str) {
+    const m = str.match(/(\d{1,3}(?:[,. ]\d{3})+|(?<!\d)\d{3,6}(?!\d))/);
+    if (!m) return null;
+    const value = parseInt(m[1].replace(/[,. ]/g, ''), 10);
+    return isNaN(value) || value <= 0 ? null : value;
+  }
+
+  /**
+   * 통화 표시가 붙은 숫자를 가격 후보로 추출한다.
+   * 구조화된 result(lines 포함)가 주어지면 박스 단위(신뢰도+글자크기 기반)로,
+   * 아니면 기존 텍스트 기반 방식으로 폴백한다.
+   */
+  function extractPriceCandidates(input) {
+    if (input && typeof input === 'object' && Array.isArray(input.lines)) {
+      const boxes = flattenBoxes(input.lines);
+      const boxResult = extractPriceCandidatesFromBoxes(boxes);
+      if (boxResult.length > 0) return boxResult;
+      // 박스 정보로 못 찾으면 텍스트 폴백도 시도(안전망)
+      return extractPriceCandidatesFromText(input.text || '');
+    }
+    return extractPriceCandidatesFromText(typeof input === 'string' ? input : '');
   }
 
   /**
    * 숫자+단위(g, kg, ml, l, lb, oz) 조합을 용량 후보로 추출한다.
+   * (아직까지 실측에서 이 부분 자체의 오탐은 없었어서 텍스트 기반 방식을 유지한다)
    */
-  function extractAmountCandidates(text) {
-    const found = new Map(); // key(value+unit) -> {value, unit, raw}
+  function extractAmountCandidates(input) {
+    const text = input && typeof input === 'object' ? (input.text || '') : (input || '');
+    const found = new Map();
 
     const re = new RegExp(`(\\d+(?:\\.\\d+)?)\\s?(${WEIGHT_VOLUME_UNITS.join('|')})\\b`, 'gi');
     let m;
@@ -68,9 +208,9 @@ const OcrParser = (() => {
   /**
    * OCR 텍스트에서 상품명으로 보이는 한 줄을 추측한다.
    * 숫자/단위/통화기호만 있는 줄은 제외하고, 한글이 가장 많이 포함된 줄을 상품명으로 본다.
-   * (ESL 라벨은 보통 상품명이 한 줄, 가격/용량은 숫자 위주라 이 방식이 실사용에서 잘 맞는다)
    */
-  function guessProductName(text) {
+  function guessProductName(input) {
+    const text = input && typeof input === 'object' ? (input.text || '') : (input || '');
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
     let best = null;
     let bestScore = 0;
@@ -86,35 +226,47 @@ const OcrParser = (() => {
   }
 
   /**
-   * 쇼핑리스트 자동추가용: 후보들 중 가장 그럴듯한 값 하나씩만 뽑아서 반환한다.
-   * (기존 analyze()는 후보 목록을 반환해서 사용자가 직접 고르게 했지만,
-   *  자동추가 흐름에서는 사람이 고를 시간이 없으므로 "가장 그럴듯한 것 하나"를 바로 확정한다)
-   * @returns {{ name: string|null, price: number|null, amount: number|null, unit: string|null, complete: boolean }}
+   * 라벨이 ESL 디지털 태그인지, 정육점/수산 같은 구조화된 인쇄 라벨인지 힌트만 준다.
+   * 파싱 로직 분기용이 아니라 "카테고리 자동 추정"(육류/수산 등) 참고용.
    */
-  function autoExtract(text) {
-    const priceCandidates = extractPriceCandidates(text);
-    const amountCandidates = extractAmountCandidates(text);
-    const price = priceCandidates.length > 0 ? priceCandidates[0].value : null; // 이미 큰 금액순 정렬됨
+  function detectLabelHint(input) {
+    const text = input && typeof input === 'object' ? (input.text || '') : (input || '');
+    const compact = text.replace(/\s/g, '');
+    const score = BUTCHER_KEYWORDS.filter((k) => compact.includes(k)).length;
+    return score >= 2 ? 'butcher' : 'esl';
+  }
+
+  /**
+   * 쇼핑리스트 자동추가용: 후보들 중 가장 그럴듯한 값 하나씩만 뽑아서 반환한다.
+   * @param {string|Object} input - OCR 원본 텍스트 또는 {text, lines} 구조화 결과
+   * @returns {{ name: string|null, price: number|null, amount: number|null, unit: string|null, complete: boolean, labelHint: string }}
+   */
+  function autoExtract(input) {
+    const priceCandidates = extractPriceCandidates(input);
+    const amountCandidates = extractAmountCandidates(input);
+    const price = priceCandidates.length > 0 ? priceCandidates[0].value : null; // 이미 우선순위대로 정렬됨
     const amountInfo = amountCandidates.length > 0 ? amountCandidates[0] : null;
-    const name = guessProductName(text);
+    const name = guessProductName(input);
     return {
       name,
       price,
       amount: amountInfo ? amountInfo.value : null,
       unit: amountInfo ? amountInfo.unit : null,
       complete: price != null && amountInfo != null, // 이름은 못 찾아도 계산 자체는 가능
+      labelHint: detectLabelHint(input),
     };
   }
 
   /**
-   * OCR 텍스트 전체를 분석해서 가격/용량 후보를 한번에 반환한다.
+   * OCR 결과 전체를 분석해서 가격/용량 후보를 한번에 반환한다.
    */
-  function analyze(text) {
+  function analyze(input) {
     return {
-      priceCandidates: extractPriceCandidates(text),
-      amountCandidates: extractAmountCandidates(text),
+      priceCandidates: extractPriceCandidates(input),
+      amountCandidates: extractAmountCandidates(input),
+      labelHint: detectLabelHint(input),
     };
   }
 
-  return { analyze, autoExtract, extractPriceCandidates, extractAmountCandidates, guessProductName };
+  return { analyze, autoExtract, extractPriceCandidates, extractAmountCandidates, guessProductName, detectLabelHint };
 })();

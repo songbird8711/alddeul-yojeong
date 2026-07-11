@@ -836,7 +836,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // (정확도 검증이 끝나면 지워도 되지만, 당분간은 유지 — 문제 재현에 필요)
         console.log('[알뜰요정 OCR 진단] 원본 인식 텍스트:', JSON.stringify(text));
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
-        const analysis = OcrParser.analyze(text);
+        const analysis = OcrParser.analyze(result);
         console.log('[알뜰요정 OCR 진단] 파싱된 후보값:', analysis);
         showOcrDebugOverlay(`상품${p} 카드`, { 원본텍스트: text, 파싱결과: analysis, 전체결과객체: result }, canvas);
         renderOcrCandidates(p, analysis);
@@ -996,7 +996,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 진단용 로그: 인식 실패 시 콘솔에서 "OCR 원본 텍스트"가 비어있는지, 이상한 글자가 나오는지 확인 가능
         console.log('[알뜰요정 OCR 진단] 원본 인식 텍스트:', JSON.stringify(text));
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
-        const extracted = OcrParser.autoExtract(text);
+        const extracted = OcrParser.autoExtract(result);
         console.log('[알뜰요정 OCR 진단] 자동추출 결과:', extracted);
         showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted, 전체결과객체: result }, canvas);
 
