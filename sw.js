@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v15'; // v14 -> v15: OCR 가격 파싱 버그 수정(콤마가 공백으로 읽히는 경우 숫자 재결합)
+const CACHE_NAME = 'alddeul-yojeong-v16'; // v15 -> v16: ESL 크롭 로직 개선(중앙영역 우선크롭 + 실패시 폴백을 원본전체->중앙크롭으로 낮춤) + 촬영 안내문구 추가
 const ASSETS = [
   './index.html',
   './style.css',
