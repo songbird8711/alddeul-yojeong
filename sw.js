@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v16'; // v15 -> v16: ESL 크롭 로직 개선(중앙영역 우선크롭 + 실패시 폴백을 원본전체->중앙크롭으로 낮춤) + 촬영 안내문구 추가
+const CACHE_NAME = 'alddeul-yojeong-v17'; // v16 -> v17: 가격 파싱 마침표(.) 구분자 대응 + 그레이스케일 전처리 추가 + 진단오버레이에 전체결과객체 표시
 const ASSETS = [
   './index.html',
   './style.css',
