@@ -119,6 +119,44 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultSection = document.getElementById('result');
   const historyList = document.getElementById('historyList');
 
+  // ---- 화면 전환: 오늘 장보기(기본) <-> 상품 비교(보조 기능) ----
+  const listView = document.getElementById('listView');
+  const compareView = document.getElementById('compareView');
+  const compareBar = document.getElementById('compareBar');
+
+  function showListView() {
+    listView.classList.remove('hidden');
+    compareView.classList.add('hidden');
+    compareBar.classList.add('hidden');
+  }
+
+  /**
+   * 비교 화면을 연다. prefillItem이 있으면 상품 A에 그 항목 정보를 채워서
+   * "이 상품과 비슷한 걸 비교"하는 흐름으로 시작한다.
+   */
+  function showCompareView(prefillItem) {
+    listView.classList.add('hidden');
+    compareView.classList.remove('hidden');
+    compareBar.classList.remove('hidden');
+    if (prefillItem) {
+      applyState('A', {
+        name: prefillItem.name,
+        price: prefillItem.price,
+        amount: prefillItem.amount,
+        unit: prefillItem.unit,
+        currency: 'KRW',
+        discountType: 'none',
+      });
+      els.B.name.value = '';
+      els.B.price.value = '';
+      liveUpdate('B');
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  document.getElementById('compareEntryBtn').addEventListener('click', () => showCompareView(null));
+  document.getElementById('backToListBtn').addEventListener('click', showListView);
+
   // Frankfurter API가 지원하지 않아 환율 자동 조회가 불가능한 통화 (직접 입력 필요)
   const EXRATE_AUTO_UNSUPPORTED = ['VND', 'TWD'];
 
@@ -522,6 +560,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   ensureExchangeRates();
   initShoppingList();
+  initConfirmAddCard();
+  showListView();
 
   // ---- 입력 중 자동 임시저장 (products 영역 안의 모든 입력 변화를 위임 방식으로 감지) ----
   let draftSaveTimer = null;
@@ -895,6 +935,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </div>
         <div class="list-item-unit">${item.unitLabel} ${krw(item.unitPriceKRW)}원</div>
         ${renderOnlinePriceRow(item)}
+        <button type="button" class="list-item-compare" data-compare-id="${item.id}">🔍 비슷한 상품과 비교</button>
         <button type="button" class="list-item-remove" data-remove-id="${item.id}" aria-label="삭제">✕</button>
       </li>
     `).join('');
@@ -903,6 +944,13 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('click', () => {
         ShoppingListStore.remove(btn.getAttribute('data-remove-id'));
         renderShoppingList();
+      });
+    });
+
+    listEl.querySelectorAll('[data-compare-id]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const item = ShoppingListStore.getAll().find((i) => i.id === btn.getAttribute('data-compare-id'));
+        if (item) showCompareView(item);
       });
     });
   }
@@ -969,6 +1017,118 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  // ---- 확인 후 담기 카드 (완전자동추가의 안전장치) ----
+  // 실제 라벨로 여러 번 테스트한 결과 완전자동은 오인식을 그대로 반영할 위험이 있어,
+  // 추출된 값을 사용자에게 보여주고 확인(또는 수정)한 뒤에만 리스트에 담도록 바꿨다.
+  function updateConfirmPreview() {
+    const previewEl = document.getElementById('confirmPreview');
+    const price = Number(document.getElementById('confirmPrice').value);
+    const amount = Number(document.getElementById('confirmAmount').value);
+    const unit = document.getElementById('confirmUnit').value;
+    previewEl.classList.remove('error');
+    if (!price || !amount) {
+      previewEl.textContent = '가격과 용량을 입력하면 단가가 계산돼요';
+      return;
+    }
+    try {
+      const calc = Calculator.calcUnitPrice({ price, amount, unit, currency: 'KRW', discountType: 'none' });
+      previewEl.textContent = `${calc.unitLabel} ${krw(calc.unitPriceKRW)}원`;
+    } catch (e) {
+      previewEl.textContent = '값을 확인해주세요';
+      previewEl.classList.add('error');
+    }
+  }
+
+  function showConfirmAddCard(extracted, canvas) {
+    const overlay = document.getElementById('confirmAddCard');
+    const nameInput = document.getElementById('confirmName');
+    const priceInput = document.getElementById('confirmPrice');
+    const amountInput = document.getElementById('confirmAmount');
+    const unitSelect = document.getElementById('confirmUnit');
+    const thumb = document.getElementById('confirmAddThumb');
+
+    nameInput.value = extracted.name || '';
+    priceInput.value = extracted.price != null ? extracted.price : '';
+    amountInput.value = extracted.amount != null ? extracted.amount : '';
+    unitSelect.value = extracted.unit || 'g';
+
+    try {
+      thumb.src = canvas.toDataURL('image/jpeg', 0.7);
+      thumb.classList.remove('hidden');
+    } catch (e) {
+      thumb.classList.add('hidden');
+    }
+
+    updateConfirmPreview();
+    overlay.classList.remove('hidden');
+
+    // 자동추출이 못 채운 칸이 있으면 그 칸에 바로 포커스를 줘서 채우기 편하게 한다
+    if (!extracted.price) priceInput.focus();
+    else if (!extracted.amount) amountInput.focus();
+    else if (!extracted.name) nameInput.focus();
+  }
+
+  function hideConfirmAddCard() {
+    document.getElementById('confirmAddCard').classList.add('hidden');
+  }
+
+  function initConfirmAddCard() {
+    ['confirmPrice', 'confirmAmount', 'confirmUnit'].forEach((id) => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', updateConfirmPreview);
+      el.addEventListener('change', updateConfirmPreview);
+    });
+
+    document.getElementById('confirmCancelBtn').addEventListener('click', hideConfirmAddCard);
+
+    document.getElementById('confirmRetakeBtn').addEventListener('click', () => {
+      hideConfirmAddCard();
+      document.getElementById('eslCaptureInput').click();
+    });
+
+    document.getElementById('confirmAddBtn').addEventListener('click', () => {
+      const name = document.getElementById('confirmName').value.trim();
+      const price = Number(document.getElementById('confirmPrice').value);
+      const amount = Number(document.getElementById('confirmAmount').value);
+      const unit = document.getElementById('confirmUnit').value;
+      const previewEl = document.getElementById('confirmPreview');
+
+      if (!price || !amount) {
+        previewEl.textContent = '가격과 용량을 먼저 입력해주세요';
+        previewEl.classList.add('error');
+        return;
+      }
+
+      let calc;
+      try {
+        calc = Calculator.calcUnitPrice({ price, amount, unit, currency: 'KRW', discountType: 'none' });
+      } catch (e) {
+        previewEl.textContent = '값을 다시 확인해주세요: ' + e.message;
+        previewEl.classList.add('error');
+        return;
+      }
+
+      const record = ShoppingListStore.add({
+        name: name || null,
+        price,
+        amount,
+        unit,
+        unitLabel: calc.unitLabel,
+        unitPriceKRW: calc.unitPriceKRW,
+        priceKRW: price,
+        onlineStatus: name ? 'loading' : 'none',
+      });
+
+      hideConfirmAddCard();
+      renderShoppingList();
+      showAddToast(record);
+
+      if (name) {
+        fetchOnlinePriceForItem(record.id, name);
+      }
+    });
+  }
+
   function initShoppingList() {
     renderShoppingList();
 
@@ -1000,39 +1160,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 자동추출 결과:', extracted);
         showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted, 전체결과객체: result }, canvas);
 
-        if (!extracted.complete) {
-          showErrorToast('가격이나 용량을 읽지 못했어요. 다시 촬영해주세요.');
-          return;
-        }
-
-        const calc = Calculator.calcUnitPrice({
-          price: extracted.price,
-          amount: extracted.amount,
-          unit: extracted.unit,
-          currency: 'KRW',
-          discountType: 'none',
-        });
-
-        const record = ShoppingListStore.add({
-          name: extracted.name,
-          price: extracted.price,
-          amount: extracted.amount,
-          unit: extracted.unit,
-          unitLabel: calc.unitLabel,
-          unitPriceKRW: calc.unitPriceKRW,
-          priceKRW: extracted.price, // KRW 고정 흐름이라 payAmountKRW와 동일
-          onlineStatus: extracted.name ? 'loading' : 'none', // 상품명을 못 찾았으면 검색 자체가 불가능
-        });
-
-        renderShoppingList();
-        showAddToast(record);
-
-        // 리스트 추가 자체는 바로 끝내고, 온라인 최저가는 도착하는 대로 채워넣는다(화면을 막지 않음)
-        if (extracted.name) {
-          fetchOnlinePriceForItem(record.id, extracted.name);
-        }
+        // 완전자동추가 대신, 추출값을 보여주고 사용자가 확인(또는 수정)한 뒤 담도록 한다.
+        // (실제 라벨 다수로 테스트한 결과 완전자동은 오인식이 그대로 반영될 위험이 있어 안전장치로 전환)
+        showConfirmAddCard(extracted, canvas);
       } catch (err) {
-        console.error('ESL 자동추가 오류:', err);
+        console.error('ESL 인식 오류:', err);
         showOcrDebugOverlay('오늘 장보기(ESL) - 실패', { 에러메시지: err && err.message, 스택: err && err.stack });
         showErrorToast('인식에 실패했어요. 다시 촬영해주세요.');
       } finally {
