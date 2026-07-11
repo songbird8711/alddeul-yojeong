@@ -6,14 +6,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- [임시 진단용] OCR 결과를 devtools 없이 화면에서 바로 보고 복사할 수 있는 오버레이 ----
   // 정확도 검증이 끝나면 이 블록과 호출부만 지우면 원상복구됩니다.
-  function showOcrDebugOverlay(title, payload) {
+  function showOcrDebugOverlay(title, payload, imageCanvas) {
     let box = document.getElementById('ocrDebugOverlay');
     if (!box) {
       box = document.createElement('div');
       box.id = 'ocrDebugOverlay';
       box.style.cssText = [
         'position:fixed', 'left:8px', 'right:8px', 'bottom:8px',
-        'max-height:45vh', 'overflow:auto', 'z-index:9999',
+        'max-height:60vh', 'overflow:auto', 'z-index:9999',
         'background:#0c0c0c', 'color:#7CFC7C', 'font-family:monospace',
         'font-size:11px', 'line-height:1.5', 'padding:10px',
         'border-radius:10px', 'box-shadow:0 4px 20px rgba(0,0,0,0.4)',
@@ -31,6 +31,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const fullText = `[알뜰요정 OCR 진단 - ${title}]\n${text}`;
 
     box.innerHTML = '';
+
+    if (imageCanvas) {
+      const label = document.createElement('div');
+      label.textContent = '👉 실제로 OCR에 들어간(크롭된) 이미지:';
+      label.style.cssText = 'color:#fff;margin-bottom:4px;';
+      box.appendChild(label);
+
+      const img = document.createElement('img');
+      img.src = imageCanvas.toDataURL('image/png');
+      img.style.cssText = 'max-width:100%;border:2px solid #7CFC7C;border-radius:6px;margin-bottom:8px;display:block;';
+      box.appendChild(img);
+    }
+
     const pre = document.createElement('div');
     pre.textContent = fullText;
     box.appendChild(pre);
@@ -768,7 +781,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const analysis = OcrParser.analyze(text);
         console.log('[알뜰요정 OCR 진단] 파싱된 후보값:', analysis);
-        showOcrDebugOverlay(`상품${p} 카드`, { 원본텍스트: text, 파싱결과: analysis });
+        showOcrDebugOverlay(`상품${p} 카드`, { 원본텍스트: text, 파싱결과: analysis }, canvas);
         renderOcrCandidates(p, analysis);
       } catch (err) {
         console.error('OCR 오류:', err);
@@ -926,7 +939,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const extracted = OcrParser.autoExtract(text);
         console.log('[알뜰요정 OCR 진단] 자동추출 결과:', extracted);
-        showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted });
+        showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted }, canvas);
 
         if (!extracted.complete) {
           showErrorToast('가격이나 용량을 읽지 못했어요. 다시 촬영해주세요.');
