@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v12'; // v11 -> v12: ESL 자동추가 시 온라인 최저가 백그라운드 자동조회 추가
+const CACHE_NAME = 'alddeul-yojeong-v13'; // v12 -> v13: OCR 진단 오버레이 추가(devtools 없이 화면에서 원본 인식결과 확인)
 const ASSETS = [
   './index.html',
   './style.css',
@@ -10,7 +10,6 @@ const ASSETS = [
   './icons/icon.svg',
   './offline.html',
 ];
-
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME)
@@ -19,7 +18,6 @@ self.addEventListener('install', (event) => {
   );
   self.skipWaiting();
 });
-
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -28,7 +26,6 @@ self.addEventListener('activate', (event) => {
   );
   self.clients.claim();
 });
-
 // 캐시에 저장해도 안전한 응답인지 확인.
 // - 정상(200) 응답만 저장한다.
 // - 리다이렉트를 거친 응답(response.redirected === true)은 저장하지 않는다.
@@ -37,16 +34,13 @@ self.addEventListener('activate', (event) => {
 function isCacheable(response) {
   return response && response.ok && !response.redirected && response.type !== 'opaqueredirect';
 }
-
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
-
   const url = new URL(event.request.url);
   // /api/ 요청(온라인 최저가 검색 등)은 실시간 데이터라 캐싱하지 않고 그대로 네트워크로 통과시킨다.
   if (url.pathname.startsWith('/api/')) {
     return; // 서비스워커가 가로채지 않음 -> 브라우저 기본 네트워크 요청으로 처리됨
   }
-
   // ---- 페이지 이동(navigate) 요청: 네트워크 우선, 실패 시에만 캐시 ----
   // 앱을 껐다 켤 때마다 항상 최신 페이지를 받아오고, 오프라인일 때만 캐시로 대체한다.
   if (event.request.mode === 'navigate') {
@@ -69,12 +63,10 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-
   // ---- 그 외 정적 자산(js/css/이미지 등): 캐시 우선, 없으면 네트워크 ----
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) return cached;
-
       return fetch(event.request)
         .then((res) => {
           if (isCacheable(res)) {
