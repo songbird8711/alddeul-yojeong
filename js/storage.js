@@ -51,6 +51,19 @@ const ShoppingListStore = (() => {
     return list;
   }
 
+  /**
+   * 이미 담긴 항목 일부를 갱신한다 (예: 나중에 도착하는 온라인 최저가, 카테고리 수정 등).
+   * @returns {Object|null} 갱신된 레코드, 해당 id가 없으면 null
+   */
+  function update(id, patch) {
+    const list = getAll();
+    const idx = list.findIndex((item) => item.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], ...patch };
+    save(list);
+    return list[idx];
+  }
+
   function clear() {
     localStorage.removeItem(KEY);
   }
@@ -59,7 +72,7 @@ const ShoppingListStore = (() => {
     return getAll().reduce((sum, item) => sum + (Number(item.priceKRW) || 0), 0);
   }
 
-  return { getAll, add, remove, clear, getTotal };
+  return { getAll, add, update, remove, clear, getTotal };
 })();
 
 const HistoryStore = (() => {

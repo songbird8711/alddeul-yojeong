@@ -717,6 +717,28 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- 오늘 장보기 리스트 (ESL 자동추가, 베타) ----
   let addToastTimer = null;
 
+  function renderOnlinePriceRow(item) {
+    if (item.onlineStatus === 'loading') {
+      return `<div class="list-item-online loading">🔍 온라인 최저가 확인 중...</div>`;
+    }
+    if (item.onlineStatus === 'done' && item.onlinePrice != null) {
+      const diff = item.price - item.onlinePrice;
+      if (diff > 0) {
+        return `<a class="list-item-online cheaper" href="${item.onlineLink}" target="_blank" rel="noopener noreferrer">
+          🛒 온라인이 ${krw(diff)}원 더 저렴해요 (${krw(item.onlinePrice)}원 · ${escapeHtml(item.onlineMall || '')})
+        </a>`;
+      }
+      return `<div class="list-item-online ok">✓ 마트가 더 저렴하거나 비슷해요 (온라인 ${krw(item.onlinePrice)}원)</div>`;
+    }
+    if (item.onlineStatus === 'none') {
+      return `<div class="list-item-online muted">온라인 검색 결과가 없어요</div>`;
+    }
+    if (item.onlineStatus === 'error') {
+      return `<div class="list-item-online muted">온라인 최저가 확인 실패</div>`;
+    }
+    return '';
+  }
+
   function renderShoppingList() {
     const list = ShoppingListStore.getAll();
     const listEl = document.getElementById('shoppingList');
@@ -738,6 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
           <span class="list-item-price">${krw(item.price)}원</span>
         </div>
         <div class="list-item-unit">${item.unitLabel} ${krw(item.unitPriceKRW)}원</div>
+        ${renderOnlinePriceRow(item)}
         <button type="button" class="list-item-remove" data-remove-id="${item.id}" aria-label="삭제">✕</button>
       </li>
     `).join('');
@@ -782,6 +805,34 @@ document.addEventListener('DOMContentLoaded', () => {
     toast.classList.add('toast-error');
     if (addToastTimer) clearTimeout(addToastTimer);
     addToastTimer = setTimeout(() => toast.classList.add('hidden'), 4000);
+  }
+
+  // ESL로 담은 항목의 온라인 최저가를 백그라운드에서 조회해서 리스트 항목에 채워넣는다.
+  // 실패하거나 결과가 없어도 리스트 추가 자체(이미 끝남)에는 영향 없음 — 어디까지나 "덤" 정보.
+  async function fetchOnlinePriceForItem(itemId, name) {
+    try {
+      const res = await fetch(`/api/search-price?query=${encodeURIComponent(name)}`);
+      const data = await res.json();
+
+      if (!res.ok || !data.items || data.items.length === 0) {
+        ShoppingListStore.update(itemId, { onlineStatus: 'none' });
+        renderShoppingList();
+        return;
+      }
+
+      const cheapest = data.items[0]; // API가 이미 오름차순(sort=asc)으로 정렬해서 반환
+      ShoppingListStore.update(itemId, {
+        onlineStatus: 'done',
+        onlinePrice: cheapest.price,
+        onlineMall: cheapest.mallName,
+        onlineLink: cheapest.link,
+      });
+      renderShoppingList();
+    } catch (e) {
+      console.warn('온라인 최저가 조회 실패:', e);
+      ShoppingListStore.update(itemId, { onlineStatus: 'error' });
+      renderShoppingList();
+    }
   }
 
   function initShoppingList() {
@@ -832,10 +883,16 @@ document.addEventListener('DOMContentLoaded', () => {
           unitLabel: calc.unitLabel,
           unitPriceKRW: calc.unitPriceKRW,
           priceKRW: extracted.price, // KRW 고정 흐름이라 payAmountKRW와 동일
+          onlineStatus: extracted.name ? 'loading' : 'none', // 상품명을 못 찾았으면 검색 자체가 불가능
         });
 
         renderShoppingList();
         showAddToast(record);
+
+        // 리스트 추가 자체는 바로 끝내고, 온라인 최저가는 도착하는 대로 채워넣는다(화면을 막지 않음)
+        if (extracted.name) {
+          fetchOnlinePriceForItem(record.id, extracted.name);
+        }
       } catch (err) {
         console.error('ESL 자동추가 오류:', err);
         showErrorToast('인식에 실패했어요. 다시 촬영해주세요.');
