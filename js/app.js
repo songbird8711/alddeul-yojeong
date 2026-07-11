@@ -667,6 +667,28 @@ document.addEventListener('DOMContentLoaded', () => {
     return out;
   }
 
+  // PaddleOCR 공식 문서 권장사항: "그레이스케일/이진화한 이미지에서 인식률이 더 좋다".
+  // 별도 라이브러리(ppu-ocv) 없이 캔버스 픽셀만으로 그레이스케일 변환 + 약한 대비 보정을 적용한다.
+  // (실제 사진에서 큰 가격숫자만 잡히고 작은 상품명/용량 글씨가 통째로 안 읽히는 문제 —
+  //  탐지 단계가 저대비 작은 글씨를 놓치는 게 원인일 가능성이 높아 시도해보는 조치)
+  function toGrayscaleCanvas(canvas) {
+    const out = document.createElement('canvas');
+    out.width = canvas.width;
+    out.height = canvas.height;
+    const ctx = out.getContext('2d');
+    ctx.drawImage(canvas, 0, 0);
+    const imgData = ctx.getImageData(0, 0, out.width, out.height);
+    const d = imgData.data;
+    const CONTRAST = 1.15; // 살짝만 올린다 — 너무 세게 올리면 얇은 획이 끊겨서 오히려 역효과
+    for (let i = 0; i < d.length; i += 4) {
+      const gray = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+      const boosted = Math.max(0, Math.min(255, (gray - 128) * CONTRAST + 128));
+      d[i] = d[i + 1] = d[i + 2] = boosted;
+    }
+    ctx.putImageData(imgData, 0, 0);
+    return out;
+  }
+
   // 감지된 4개 점을 [좌상단, 우상단, 우하단, 좌하단] 순서로 정렬
   function orderCornerPoints(pts) {
     const sums = pts.map((p) => p.x + p.y);
@@ -806,7 +828,8 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const service = await getOcrService();
         const rawCanvas = await fileToCanvas(file);
-        const canvas = await detectAndCropEsl(rawCanvas);
+        const croppedCanvas = await detectAndCropEsl(rawCanvas);
+        const canvas = toGrayscaleCanvas(croppedCanvas); // PaddleOCR 권장: 그레이스케일이 인식률이 더 좋음
         const result = await service.recognize(canvas);
         const text = result && result.text ? result.text : '';
         // 원인 진단용: 실제 마트 사진에서 PaddleOCR이 뭘 반환하는지 그대로 남긴다.
@@ -815,7 +838,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const analysis = OcrParser.analyze(text);
         console.log('[알뜰요정 OCR 진단] 파싱된 후보값:', analysis);
-        showOcrDebugOverlay(`상품${p} 카드`, { 원본텍스트: text, 파싱결과: analysis }, canvas);
+        showOcrDebugOverlay(`상품${p} 카드`, { 원본텍스트: text, 파싱결과: analysis, 전체결과객체: result }, canvas);
         renderOcrCandidates(p, analysis);
       } catch (err) {
         console.error('OCR 오류:', err);
@@ -966,7 +989,8 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const service = await getOcrService();
         const rawCanvas = await fileToCanvas(file);
-        const canvas = await detectAndCropEsl(rawCanvas);
+        const croppedCanvas = await detectAndCropEsl(rawCanvas);
+        const canvas = toGrayscaleCanvas(croppedCanvas); // PaddleOCR 권장: 그레이스케일이 인식률이 더 좋음
         const result = await service.recognize(canvas);
         const text = result && result.text ? result.text : '';
         // 진단용 로그: 인식 실패 시 콘솔에서 "OCR 원본 텍스트"가 비어있는지, 이상한 글자가 나오는지 확인 가능
@@ -974,7 +998,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const extracted = OcrParser.autoExtract(text);
         console.log('[알뜰요정 OCR 진단] 자동추출 결과:', extracted);
-        showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted }, canvas);
+        showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted, 전체결과객체: result }, canvas);
 
         if (!extracted.complete) {
           showErrorToast('가격이나 용량을 읽지 못했어요. 다시 촬영해주세요.');
