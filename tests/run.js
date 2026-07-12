@@ -203,6 +203,20 @@ function testCalculator(win) {
 
 // ---------------------------------------------------------------------------
 
+function testHiddenClassNeverLoses(win) {
+  section('CSS: .hidden 클래스가 다른 클래스에 밀리지 않는지 (실제 버그 재발 방지)');
+  // 실제로 겪었던 버그: .hidden { display:none }이 CSS 파일 앞쪽에 있고,
+  // .confirm-add-overlay { display:flex }가 뒤에 있어서, "hidden"을 줘도 안 숨겨졌었다.
+  // 이제는 .hidden에 !important가 붙어있어야 어떤 순서로 클래스가 추가되든 항상 이긴다.
+  const css = fs.readFileSync(path.join(ROOT, 'style.css'), 'utf8');
+  const hiddenRuleMatch = css.match(/\.hidden\s*\{[^}]*\}/);
+  assert(!!hiddenRuleMatch, '.hidden 규칙이 style.css에 존재하는지 확인');
+  if (hiddenRuleMatch) {
+    assert(/display\s*:\s*none\s*!important/.test(hiddenRuleMatch[0]),
+      '.hidden { display: none !important; } 로 되어있는지 확인 (다른 클래스에 밀리지 않도록)');
+  }
+}
+
 function main() {
   const win = loadEnv();
   testHistoryStore(win);
@@ -210,6 +224,7 @@ function main() {
   testOcrParser(win);
   testCalculator(win);
   testShoppingListAndMonthly(win);
+  testHiddenClassNeverLoses(win);
 
   console.log('\n' + '='.repeat(40));
   console.log(`총 ${passCount + failCount}개 중 ${passCount}개 통과, ${failCount}개 실패`);
