@@ -80,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
       badge.remove();
       return;
     }
-    badge.textContent = `🧪 진단 ${count}개 모음 · 탭해서 전체 복사`;
+    badge.textContent = `🧪 진단 ${count}개 모음 · 탭해서 내보내기`;
   }
   function showDebugLogPanel() {
     let panel = document.getElementById('debugLogPanel');
@@ -110,18 +110,36 @@ document.addEventListener('DOMContentLoaded', () => {
     panel.appendChild(pre);
 
     const btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;position:sticky;bottom:0;background:#0c0c0c;padding-top:8px;';
+    btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;position:sticky;bottom:0;background:#0c0c0c;padding-top:8px;flex-wrap:wrap;';
+
+    const exportBtn = document.createElement('button');
+    exportBtn.textContent = '📥 파일로 내보내기';
+    exportBtn.style.cssText = 'flex:1;min-width:120px;padding:10px;background:#2A6FDB;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;';
+    exportBtn.onclick = () => {
+      const blob = new Blob([fullText], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      a.href = url;
+      a.download = `alddeul-ocr-debug-${stamp}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      exportBtn.textContent = '✅ 다운로드됨! (파일앱/다운로드함에서 확인)';
+      setTimeout(() => { exportBtn.textContent = '📥 파일로 내보내기'; }, 2000);
+    };
 
     const copyAllBtn = document.createElement('button');
-    copyAllBtn.textContent = '📋 전체 복사';
-    copyAllBtn.style.cssText = 'flex:1;padding:10px;background:#1E7F4C;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;';
+    copyAllBtn.textContent = '📋 복사';
+    copyAllBtn.style.cssText = 'padding:10px 12px;background:#1E7F4C;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;';
     copyAllBtn.onclick = async () => {
       try {
         await navigator.clipboard.writeText(fullText);
-        copyAllBtn.textContent = '✅ 전체 복사됨!';
-        setTimeout(() => { copyAllBtn.textContent = '📋 전체 복사'; }, 1500);
+        copyAllBtn.textContent = '✅ 복사됨!';
+        setTimeout(() => { copyAllBtn.textContent = '📋 복사'; }, 1500);
       } catch (e) {
-        copyAllBtn.textContent = '복사 실패 — 길게 눌러서 직접 복사해주세요';
+        copyAllBtn.textContent = '복사 실패';
       }
     };
 
@@ -140,82 +158,40 @@ document.addEventListener('DOMContentLoaded', () => {
     closeBtn.style.cssText = 'padding:10px 12px;background:#333;color:#fff;border:none;border-radius:6px;font-size:12px;';
     closeBtn.onclick = () => panel.remove();
 
+    btnRow.appendChild(exportBtn);
     btnRow.appendChild(copyAllBtn);
     btnRow.appendChild(clearBtn);
     btnRow.appendChild(closeBtn);
     panel.appendChild(btnRow);
   }
 
-  function showOcrDebugOverlay(title, payload, imageCanvas) {
+  // 예전엔 사진 찍을 때마다 화면을 가리는 큰 진단 박스가 매번 떴는데(불편함),
+  // 이제는 자동으로 모음에 저장만 하고 화면 위쪽에 작게 "저장됨" 알림만 잠깐 보여준다.
+  // 자세히 보고 싶을 때는 하단 배지(🧪 진단 N개 모음)를 눌러서 한 번에 확인하면 된다.
+  function showOcrDebugOverlay(title, payload) {
     if (!DEBUG_MODE) return;
-    addToDebugLog(title, payload); // 모음에도 같이 쌓는다
-    let box = document.getElementById('ocrDebugOverlay');
-    if (!box) {
-      box = document.createElement('div');
-      box.id = 'ocrDebugOverlay';
-      box.style.cssText = [
-        'position:fixed', 'left:8px', 'right:8px', 'bottom:8px',
-        'max-height:60vh', 'overflow:auto', 'z-index:9999',
-        'background:#0c0c0c', 'color:#7CFC7C', 'font-family:monospace',
-        'font-size:11px', 'line-height:1.5', 'padding:10px',
-        'border-radius:10px', 'box-shadow:0 4px 20px rgba(0,0,0,0.4)',
-        'white-space:pre-wrap', 'word-break:break-all',
+    addToDebugLog(title, payload);
+    flashDebugSavedToast();
+  }
+
+  function flashDebugSavedToast() {
+    let toast = document.getElementById('debugSavedToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'debugSavedToast';
+      toast.style.cssText = [
+        'position:fixed', 'left:50%', 'top:14px', 'transform:translateX(-50%)',
+        'z-index:10002', 'background:#1C1B1A', 'color:#7CFC7C', 'font-family:monospace',
+        'font-size:12px', 'padding:7px 14px', 'border-radius:999px',
+        'box-shadow:0 4px 14px rgba(0,0,0,0.3)', 'pointer-events:none',
+        'transition:opacity 0.25s', 'opacity:0',
       ].join(';');
-      document.body.appendChild(box);
+      document.body.appendChild(toast);
     }
-
-    let text;
-    try {
-      text = JSON.stringify(payload, null, 2);
-    } catch (e) {
-      text = String(payload) + '\n(직렬화 실패: ' + e.message + ')';
-    }
-    const fullText = `[알뜰요정 OCR 진단 - ${title}]\n${text}`;
-
-    box.innerHTML = '';
-
-    if (imageCanvas) {
-      const label = document.createElement('div');
-      label.textContent = '👉 실제로 OCR에 들어간(크롭된) 이미지:';
-      label.style.cssText = 'color:#fff;margin-bottom:4px;';
-      box.appendChild(label);
-
-      const img = document.createElement('img');
-      img.src = imageCanvas.toDataURL('image/png');
-      img.style.cssText = 'max-width:100%;border:2px solid #7CFC7C;border-radius:6px;margin-bottom:8px;display:block;';
-      box.appendChild(img);
-    }
-
-    const pre = document.createElement('div');
-    pre.textContent = fullText;
-    box.appendChild(pre);
-
-    const btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
-
-    const copyBtn = document.createElement('button');
-    copyBtn.textContent = '📋 이것만 복사';
-    copyBtn.style.cssText = 'flex:1;padding:8px;background:#1E7F4C;color:#fff;border:none;border-radius:6px;font-size:12px;';
-    copyBtn.onclick = async () => {
-      try {
-        await navigator.clipboard.writeText(fullText);
-        copyBtn.textContent = '✅ 복사됨!';
-        setTimeout(() => { copyBtn.textContent = '📋 이것만 복사'; }, 1500);
-      } catch (e) {
-        copyBtn.textContent = '복사 실패 — 길게 눌러서 직접 복사해주세요';
-      }
-    };
-
-    const closeBtn = document.createElement('button');
-    closeBtn.textContent = '닫기';
-    closeBtn.style.cssText = 'padding:8px 12px;background:#333;color:#fff;border:none;border-radius:6px;font-size:12px;';
-    closeBtn.onclick = () => box.remove();
-
-    btnRow.appendChild(copyBtn);
-    btnRow.appendChild(closeBtn);
-    box.appendChild(btnRow);
-
-    renderDebugLogBadge(); // 모음 배지도 같이 갱신
+    toast.textContent = '🧪 진단 저장됨 (하단 배지에서 모아보기)';
+    toast.style.opacity = '1';
+    clearTimeout(toast._hideTimer);
+    toast._hideTimer = setTimeout(() => { toast.style.opacity = '0'; }, 1400);
   }
 
   // 촬영 버튼 아래에 "라벨 하나만 화면 중앙에 크게" 안내문구를 한 번만 삽입한다.
@@ -1186,7 +1162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const analysis = OcrParser.analyze(result);
         console.log('[알뜰요정 OCR 진단] 파싱된 후보값:', analysis);
-        showOcrDebugOverlay(`상품${p} 카드`, { 원본텍스트: text, 파싱결과: analysis, 전체결과객체: result }, canvas);
+        showOcrDebugOverlay(`상품${p} 카드`, { 원본텍스트: text, 파싱결과: analysis, 전체결과객체: result });
         renderOcrCandidates(p, analysis);
       } catch (err) {
         console.error('OCR 오류:', err);
@@ -1633,7 +1609,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[알뜰요정 OCR 진단] 전체 결과 객체:', result);
         const extracted = OcrParser.autoExtract(result);
         console.log('[알뜰요정 OCR 진단] 자동추출 결과:', extracted);
-        showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted, 전체결과객체: result }, canvas);
+        showOcrDebugOverlay('오늘 장보기(ESL)', { 원본텍스트: text, 자동추출: extracted, 전체결과객체: result });
 
         // 완전자동추가 대신, 추출값을 보여주고 사용자가 확인(또는 수정)한 뒤 담도록 한다.
         // (실제 라벨 다수로 테스트한 결과 완전자동은 오인식이 그대로 반영될 위험이 있어 안전장치로 전환)
