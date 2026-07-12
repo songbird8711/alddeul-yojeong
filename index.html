@@ -37,7 +37,8 @@
           <div class="list-header-actions">
             <button type="button" class="list-compare-entry-btn" id="compareEntryBtn">🔍 상품 비교하기</button>
             <button type="button" class="list-receipt-btn" id="receiptEntryBtn">🧾 영수증</button>
-            <button type="button" class="list-clear-btn" id="listClearBtn">비우기</button>
+            <button type="button" class="list-clear-btn" id="listClearBtn">🧾 장보기 완료</button>
+            <button type="button" class="list-clear-all-btn" id="listClearAllBtn">전체 비우기</button>
           </div>
         </div>
 
@@ -353,8 +354,21 @@
         </select>
       </label>
     </div>
+    <label class="field">
+      카테고리
+      <select id="confirmCategory"></select>
+    </label>
     <div class="confirm-add-preview" id="confirmPreview"></div>
-    <div class="confirm-add-actions">
+
+    <div class="category-match-prompt hidden" id="categoryMatchPrompt">
+      <p id="categoryMatchText"></p>
+      <div class="category-match-actions">
+        <button type="button" id="categoryMatchYesBtn">예, 맞아요</button>
+        <button type="button" id="categoryMatchNoBtn">아니요, 새 상품이에요</button>
+      </div>
+    </div>
+
+    <div class="confirm-add-actions" id="confirmAddActions">
       <button type="button" class="confirm-add-btn" id="confirmAddBtn">✓ 담기</button>
       <button type="button" class="confirm-retake-btn" id="confirmRetakeBtn">🔄 다시 촬영</button>
       <button type="button" class="confirm-cancel-btn" id="confirmCancelBtn">취소</button>

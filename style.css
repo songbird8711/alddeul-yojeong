@@ -579,6 +579,40 @@ input[type=number]:focus, select:focus {
 }
 .list-clear-btn:hover { color: var(--high-red); border-color: var(--high-red); }
 
+.list-clear-all-btn {
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.list-clear-all-btn:hover { color: var(--high-red); border-color: var(--high-red); }
+
+/* ---- 확인카드: 카테고리매칭 확인 프롬프트 ---- */
+.category-match-prompt {
+  background: #FFF6E0;
+  border: 1px solid #E8C560;
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 14px;
+  text-align: center;
+}
+.category-match-prompt p { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+.category-match-actions { display: flex; gap: 8px; }
+.category-match-actions button {
+  flex: 1;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border-radius: 8px;
+  cursor: pointer;
+  border: none;
+}
+#categoryMatchYesBtn { background: var(--cheap-green); color: #fff; }
+#categoryMatchNoBtn { background: #fff; border: 1px solid var(--line) !important; color: var(--ink-soft); }
+
 .esl-capture-btn {
   width: 100%;
   padding: 14px;

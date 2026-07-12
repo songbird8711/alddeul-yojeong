@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v21'; // v19 -> v21: 계획항목(+입력)/체크리스트(정렬)/카테고리 자동분류/오늘의 영수증/월간예산 추가, 확인카드 안 닫히던 버그 재수정 포함
+const CACHE_NAME = 'alddeul-yojeong-v22'; // v21 -> v22: 카테고리매칭 오확정 방지(확인 프롬프트 추가), 월간총액 날짜경계 버그 수정, 비우기 버튼 분리(장보기완료/전체비우기)
 const ASSETS = [
   './index.html',
   './style.css',
