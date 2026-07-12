@@ -16,8 +16,139 @@ document.addEventListener('DOMContentLoaded', () => {
   // 일반 사용자에게는 생소하고 혼란스러운 화면이라 기본적으로는 뜨지 않는다.
   // URL 뒤에 ?debug=1 을 붙여서 접속했을 때만 켜진다 (문제 재현 시 진단용).
   const DEBUG_MODE = new URLSearchParams(location.search).get('debug') === '1';
+  const DEBUG_LOG_KEY = 'alddeul-yojeong:debug-log';
+
+  // ---- 진단 결과 모아두기 ----
+  // 사진 여러 장을 연달아 테스트할 때마다 매번 복사/붙여넣기 하지 않고, 결과를 계속
+  // 쌓아뒀다가 한 번에 복사할 수 있게 한다. 이미지는 용량이 커서 모음에는 텍스트만 남긴다
+  // (개별 진단창에는 그대로 이미지가 보인다). 새로고침해도 안 날아가게 localStorage에 저장.
+  function getDebugLog() {
+    try {
+      const raw = localStorage.getItem(DEBUG_LOG_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function addToDebugLog(title, payload) {
+    const log = getDebugLog();
+    let text;
+    try {
+      text = JSON.stringify(payload, null, 2);
+    } catch (e) {
+      text = String(payload);
+    }
+    log.push({ time: new Date().toLocaleTimeString('ko-KR'), title, text });
+    try {
+      localStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(log));
+    } catch (e) {
+      console.warn('진단 모음 저장 실패(용량 초과 가능성) — 오래된 항목부터 지웁니다.', e);
+      // 용량 초과면 절반 잘라내고 재시도
+      const trimmed = log.slice(Math.ceil(log.length / 2));
+      try { localStorage.setItem(DEBUG_LOG_KEY, JSON.stringify(trimmed)); } catch (e2) { /* 그래도 안 되면 포기 */ }
+    }
+    renderDebugLogBadge();
+  }
+  function clearDebugLog() {
+    localStorage.removeItem(DEBUG_LOG_KEY);
+    renderDebugLogBadge();
+  }
+  function buildDebugLogFullText() {
+    const log = getDebugLog();
+    if (log.length === 0) return '(모아둔 진단 결과가 없어요)';
+    return log
+      .map((entry, i) => `── [${i + 1}/${log.length}] ${entry.title} (${entry.time}) ──\n${entry.text}`)
+      .join('\n\n');
+  }
+  function renderDebugLogBadge() {
+    if (!DEBUG_MODE) return;
+    const count = getDebugLog().length;
+    let badge = document.getElementById('debugLogBadge');
+    if (!badge) {
+      badge = document.createElement('button');
+      badge.id = 'debugLogBadge';
+      badge.style.cssText = [
+        'position:fixed', 'right:10px', 'bottom:10px', 'z-index:10000',
+        'background:#1C1B1A', 'color:#fff', 'border:none', 'border-radius:999px',
+        'padding:10px 14px', 'font-size:12px', 'font-weight:700',
+        'box-shadow:0 4px 14px rgba(0,0,0,0.35)',
+      ].join(';');
+      badge.onclick = showDebugLogPanel;
+      document.body.appendChild(badge);
+    }
+    if (count === 0) {
+      badge.remove();
+      return;
+    }
+    badge.textContent = `🧪 진단 ${count}개 모음 · 탭해서 전체 복사`;
+  }
+  function showDebugLogPanel() {
+    let panel = document.getElementById('debugLogPanel');
+    if (panel) panel.remove();
+    panel = document.createElement('div');
+    panel.id = 'debugLogPanel';
+    panel.style.cssText = [
+      'position:fixed', 'left:8px', 'right:8px', 'bottom:8px',
+      'max-height:70vh', 'overflow:auto', 'z-index:10001',
+      'background:#0c0c0c', 'color:#7CFC7C', 'font-family:monospace',
+      'font-size:11px', 'line-height:1.5', 'padding:10px',
+      'border-radius:10px', 'box-shadow:0 4px 20px rgba(0,0,0,0.4)',
+      'white-space:pre-wrap', 'word-break:break-all',
+    ].join(';');
+    document.body.appendChild(panel);
+
+    const fullText = buildDebugLogFullText();
+    const count = getDebugLog().length;
+
+    const header = document.createElement('div');
+    header.textContent = `📦 모아둔 진단 결과 ${count}개`;
+    header.style.cssText = 'color:#fff;font-weight:700;margin-bottom:8px;';
+    panel.appendChild(header);
+
+    const pre = document.createElement('div');
+    pre.textContent = fullText;
+    panel.appendChild(pre);
+
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;position:sticky;bottom:0;background:#0c0c0c;padding-top:8px;';
+
+    const copyAllBtn = document.createElement('button');
+    copyAllBtn.textContent = '📋 전체 복사';
+    copyAllBtn.style.cssText = 'flex:1;padding:10px;background:#1E7F4C;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:700;';
+    copyAllBtn.onclick = async () => {
+      try {
+        await navigator.clipboard.writeText(fullText);
+        copyAllBtn.textContent = '✅ 전체 복사됨!';
+        setTimeout(() => { copyAllBtn.textContent = '📋 전체 복사'; }, 1500);
+      } catch (e) {
+        copyAllBtn.textContent = '복사 실패 — 길게 눌러서 직접 복사해주세요';
+      }
+    };
+
+    const clearBtn = document.createElement('button');
+    clearBtn.textContent = '🗑️ 비우기';
+    clearBtn.style.cssText = 'padding:10px 12px;background:#B23A2E;color:#fff;border:none;border-radius:6px;font-size:12px;';
+    clearBtn.onclick = () => {
+      if (confirm(`모아둔 진단 결과 ${count}개를 전부 지울까요?`)) {
+        clearDebugLog();
+        panel.remove();
+      }
+    };
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = '닫기';
+    closeBtn.style.cssText = 'padding:10px 12px;background:#333;color:#fff;border:none;border-radius:6px;font-size:12px;';
+    closeBtn.onclick = () => panel.remove();
+
+    btnRow.appendChild(copyAllBtn);
+    btnRow.appendChild(clearBtn);
+    btnRow.appendChild(closeBtn);
+    panel.appendChild(btnRow);
+  }
+
   function showOcrDebugOverlay(title, payload, imageCanvas) {
     if (!DEBUG_MODE) return;
+    addToDebugLog(title, payload); // 모음에도 같이 쌓는다
     let box = document.getElementById('ocrDebugOverlay');
     if (!box) {
       box = document.createElement('div');
@@ -63,13 +194,13 @@ document.addEventListener('DOMContentLoaded', () => {
     btnRow.style.cssText = 'display:flex;gap:8px;margin-top:8px;';
 
     const copyBtn = document.createElement('button');
-    copyBtn.textContent = '📋 복사';
+    copyBtn.textContent = '📋 이것만 복사';
     copyBtn.style.cssText = 'flex:1;padding:8px;background:#1E7F4C;color:#fff;border:none;border-radius:6px;font-size:12px;';
     copyBtn.onclick = async () => {
       try {
         await navigator.clipboard.writeText(fullText);
         copyBtn.textContent = '✅ 복사됨!';
-        setTimeout(() => { copyBtn.textContent = '📋 복사'; }, 1500);
+        setTimeout(() => { copyBtn.textContent = '📋 이것만 복사'; }, 1500);
       } catch (e) {
         copyBtn.textContent = '복사 실패 — 길게 눌러서 직접 복사해주세요';
       }
@@ -83,6 +214,8 @@ document.addEventListener('DOMContentLoaded', () => {
     btnRow.appendChild(copyBtn);
     btnRow.appendChild(closeBtn);
     box.appendChild(btnRow);
+
+    renderDebugLogBadge(); // 모음 배지도 같이 갱신
   }
 
   // 촬영 버튼 아래에 "라벨 하나만 화면 중앙에 크게" 안내문구를 한 번만 삽입한다.
@@ -602,6 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
   safeInit('영수증 화면', initReceiptView);
   safeInit('리스트 화면 전환', showListView);
   safeInit('확인 카드 닫기', hideConfirmAddCard); // 시작 시 항상 닫힌 상태로 보장
+  safeInit('진단 모음 배지', renderDebugLogBadge); // 새로고침해도 이전에 모아둔 진단 결과가 있으면 바로 보이게
 
   // 폰에서 "껐다 켜기"는 대부분 완전 재시작이 아니라 백그라운드에서 재개되는 것이라,
   // 뜬 채로 남아있던 확인카드/디버그오버레이가 그대로 보이는 문제가 있었다.
