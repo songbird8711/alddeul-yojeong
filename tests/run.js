@@ -217,6 +217,32 @@ function testHiddenClassNeverLoses(win) {
   }
 }
 
+function testOcrServiceNoTdzRisk() {
+  section('app.js: ocrService TDZ 크래시 재발 방지 (실제 버그 재발 방지)');
+  // 실제로 겪었던 버그: "Cannot access 'ocrService' before initialization".
+  // 초기화 블록 중간의 다른 함수가 실패하면, 그 뒤에 있던 `let ocrService` 선언까지
+  // 도달하지 못해 이후 사용자가 사진 버튼을 누를 때 TDZ 에러가 났다. 두 가지로 방어했다:
+  //   1) ocrService 선언을 파일 최상단(DOMContentLoaded 콜백 바로 아래)으로 옮김
+  //   2) 초기화 함수들을 safeInit()으로 감싸서 하나가 실패해도 나머지는 계속 진행되게 함
+  // 이 테스트는 그 두 가지가 계속 지켜지는지 정적으로 확인한다(실제 실행 없이 소스만 검사).
+  const appJs = fs.readFileSync(path.join(ROOT, 'js/app.js'), 'utf8');
+  const lines = appJs.split('\n');
+
+  const ocrDeclLine = lines.findIndex((l) => /^\s*let ocrService\s*=/.test(l));
+  assert(ocrDeclLine !== -1, 'let ocrService 선언이 존재하는지 확인');
+
+  const allDeclLines = lines.filter((l) => /^\s*let ocrService\s*=/.test(l));
+  assert(allDeclLines.length === 1, `ocrService 중복 선언이 없는지 확인 (실제: ${allDeclLines.length}개)`);
+
+  const domStartLine = lines.findIndex((l) => l.includes('DOMContentLoaded'));
+  assert(ocrDeclLine !== -1 && domStartLine !== -1 && (ocrDeclLine - domStartLine) <= 10,
+    `ocrService 선언이 DOMContentLoaded 콜백 최상단 근처(10줄 이내)에 있는지 확인 (실제: ${ocrDeclLine - domStartLine}줄 뒤)`);
+
+  assert(/function safeInit\(/.test(appJs), 'safeInit() 헬퍼가 존재하는지 확인 (초기화 실패 격리용)');
+  const safeInitCallCount = (appJs.match(/safeInit\(/g) || []).length - 1; // 정의부 1개 제외
+  assert(safeInitCallCount >= 5, `주요 초기화 함수들이 safeInit()으로 감싸져 있는지 확인 (실제 호출 ${safeInitCallCount}회)`);
+}
+
 function main() {
   const win = loadEnv();
   testHistoryStore(win);
@@ -225,6 +251,7 @@ function main() {
   testCalculator(win);
   testShoppingListAndMonthly(win);
   testHiddenClassNeverLoses(win);
+  testOcrServiceNoTdzRisk();
 
   console.log('\n' + '='.repeat(40));
   console.log(`총 ${passCount + failCount}개 중 ${passCount}개 통과, ${failCount}개 실패`);
