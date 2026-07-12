@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v24'; // v23 -> v24: ocrService TDZ 크래시 재발 방지(선언 위치 최상단화 + safeInit으로 초기화 격리)
+const CACHE_NAME = 'alddeul-yojeong-v25'; // v24 -> v25: PaddleOCR 결과를 재활용한 텍스트 뭉치 클러스터링으로 ESL 위치 추정 추가(YOLO 없이)
 const ASSETS = [
   './index.html',
   './style.css',
