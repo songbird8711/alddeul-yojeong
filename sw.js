@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v26'; // v25 -> v26: 진단 결과 모아서 한번에 복사하는 기능 추가(?debug=1 모드)
+const CACHE_NAME = 'alddeul-yojeong-v27'; // v26 -> v27: 진단 오버레이가 매번 화면을 가리던 문제 수정(자동저장+작은 알림으로 전환), 진단 모음을 파일로 다운로드하는 기능 추가
 const ASSETS = [
   './index.html',
   './style.css',
