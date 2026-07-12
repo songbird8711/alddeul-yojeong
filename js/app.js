@@ -846,26 +846,150 @@ document.addEventListener('DOMContentLoaded', () => {
    * 사진에서 ESL 라벨 영역을 찾아 기울기를 펴고 크롭한 새 캔버스를 반환한다.
    * 라벨을 못 찾거나 OpenCV를 못 불러온 경우, 원본 캔버스를 그대로 반환한다(안전한 폴백).
    */
+  // ---- 텍스트 뭉치 기반 ESL 위치 추정 (YOLO 없이, PaddleOCR 결과를 "탐지기"로 재활용) ----
+  // 어차피 최종적으로 한 번 더 인식을 돌려야 하니, 그 전에 한 번 먼저 돌려서 글자 위치만
+  // 뽑아 쓴다. 서로 가까운 글자 박스끼리 묶어(클러스터링) 가장 화면 중앙에 가깝고 글자가
+  // 밀집된 뭉치를 ESL 태그로 추정한다. 새 라이브러리·학습 데이터·라벨링이 전혀 필요 없다.
+  function clusterTextBoxes(lines, canvasWidth, canvasHeight) {
+    const boxes = [];
+    (lines || []).forEach((lineArr) => {
+      (lineArr || []).forEach((b) => {
+        if (b && b.text && b.text.trim() !== '' && b.box && b.box.width > 0 && b.box.height > 0) {
+          boxes.push(b);
+        }
+      });
+    });
+    if (boxes.length === 0) return null;
+
+    // Union-Find로 서로 가까운 박스를 하나의 뭉치로 묶는다.
+    // 기준: 두 박스 사이 간격이 평균 글자 높이의 2.5배 이내면 같은 태그 안의 다른 줄로 간주.
+    const parent = boxes.map((_, i) => i);
+    function find(i) { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; }
+    function union(i, j) { const ri = find(i); const rj = find(j); if (ri !== rj) parent[ri] = rj; }
+    function boxDistance(a, b) {
+      const ax1 = a.box.x, ay1 = a.box.y, ax2 = a.box.x + a.box.width, ay2 = a.box.y + a.box.height;
+      const bx1 = b.box.x, by1 = b.box.y, bx2 = b.box.x + b.box.width, by2 = b.box.y + b.box.height;
+      const dx = Math.max(bx1 - ax2, ax1 - bx2, 0);
+      const dy = Math.max(by1 - ay2, ay1 - by2, 0);
+      return Math.hypot(dx, dy);
+    }
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const avgHeight = (boxes[i].box.height + boxes[j].box.height) / 2;
+        if (boxDistance(boxes[i], boxes[j]) <= avgHeight * 2.5) union(i, j);
+      }
+    }
+
+    const groups = new Map();
+    boxes.forEach((b, i) => {
+      const root = find(i);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push(b);
+    });
+
+    const centerX = canvasWidth / 2;
+    const centerY = canvasHeight / 2;
+    const diag = Math.hypot(canvasWidth, canvasHeight);
+
+    const clusters = Array.from(groups.values()).map((group) => {
+      const minX = Math.min(...group.map((b) => b.box.x));
+      const minY = Math.min(...group.map((b) => b.box.y));
+      const maxX = Math.max(...group.map((b) => b.box.x + b.box.width));
+      const maxY = Math.max(...group.map((b) => b.box.y + b.box.height));
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      const totalConfidence = group.reduce((s, b) => s + (b.confidence || 0), 0);
+      return {
+        rect: { x: minX, y: minY, width: maxX - minX, height: maxY - minY },
+        boxCount: group.length,
+        totalConfidence,
+        distFromCenter: Math.hypot(cx - centerX, cy - centerY),
+      };
+    });
+
+    // 박스 1개뿐인 뭉치는 우연히 잡힌 글자 하나일 수 있어, 2개 이상 뭉치를 우선한다.
+    const candidates = clusters.filter((c) => c.boxCount >= 2);
+    const pool = candidates.length > 0 ? candidates : clusters;
+
+    pool.sort((a, b) => {
+      const scoreA = a.boxCount * 2 + a.totalConfidence - (a.distFromCenter / diag) * 5;
+      const scoreB = b.boxCount * 2 + b.totalConfidence - (b.distFromCenter / diag) * 5;
+      return scoreB - scoreA;
+    });
+
+    return pool[0] || null;
+  }
+
+  function cropToRect(canvas, rect, paddingRatio = 0.2) {
+    const padX = rect.width * paddingRatio;
+    const padY = rect.height * paddingRatio;
+    const x = Math.max(0, Math.round(rect.x - padX));
+    const y = Math.max(0, Math.round(rect.y - padY));
+    const width = Math.min(canvas.width - x, Math.round(rect.width + padX * 2));
+    const height = Math.min(canvas.height - y, Math.round(rect.height + padY * 2));
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, width);
+    out.height = Math.max(1, height);
+    out.getContext('2d').drawImage(canvas, x, y, out.width, out.height, 0, 0, out.width, out.height);
+    return out;
+  }
+
+  // 클러스터링으로 잡은 영역이 너무 작으면(예: 멀리서 찍은 사진) OCR이 다시 실패하기 쉬우므로
+  // 최소 너비까지 확대해서 다음 인식 단계에 넘긴다.
+  function upscaleIfSmall(canvas, minWidth = 900) {
+    if (canvas.width >= minWidth) return canvas;
+    const scale = minWidth / canvas.width;
+    const out = document.createElement('canvas');
+    out.width = Math.round(canvas.width * scale);
+    out.height = Math.round(canvas.height * scale);
+    const ctx = out.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, 0, 0, out.width, out.height);
+    return out;
+  }
+
   async function detectAndCropEsl(canvas) {
     // 1차: 중앙 영역만 남긴다 (인접 태그·배경 글자 원천 차단). 실패해도 이 결과가 최소 폴백이 된다.
     const centerCanvas = cropToCenterRegion(canvas, 0.7, 0.55);
 
+    // 2차: PaddleOCR을 한 번 먼저 돌려서(어차피 나중에 한 번 더 돌 것) 글자가 뭉쳐있는
+    // 위치를 찾는다. 태그 하나가 여러 줄의 텍스트로 이루어져 있다는 성질을 이용 —
+    // 실제로 이번 검증에서 "218 2 109 286" 처럼 서로 다른 정보가 한 뭉치로 잘 잡혔다.
+    let locatedCanvas = centerCanvas;
+    try {
+      const service = await getOcrService();
+      const firstPass = await service.recognize(centerCanvas);
+      const cluster = clusterTextBoxes(firstPass && firstPass.lines, centerCanvas.width, centerCanvas.height);
+      if (cluster) {
+        const cropped = cropToRect(centerCanvas, cluster.rect, 0.2);
+        locatedCanvas = upscaleIfSmall(cropped, 900);
+        console.log(`[알뜰요정 ESL 감지] 텍스트 뭉치 기반 위치 추정 성공 (박스 ${cluster.boxCount}개 묶음, 최종 ${locatedCanvas.width}x${locatedCanvas.height})`);
+      } else {
+        console.log('[알뜰요정 ESL 감지] 텍스트 뭉치를 못 찾아 중앙 크롭으로 진행합니다.');
+      }
+    } catch (e) {
+      console.warn('텍스트 뭉치 기반 위치 탐지 중 오류 — 중앙 크롭으로 진행합니다.', e);
+    }
+
+    // 3차: 그 좁혀진 영역 안에서 OpenCV로 정확한 사각형 경계 + 기울기 보정을 시도한다.
+    // 검색 범위가 이미 훨씬 좁혀진 상태라 예전보다 성공률이 높을 것으로 기대한다.
     let cvLib;
     try {
       cvLib = await getOpenCv();
     } catch (e) {
-      console.warn('OpenCV를 불러오지 못해 중앙 크롭 사진으로 진행합니다.', e);
-      return centerCanvas;
+      console.warn('OpenCV를 불러오지 못해 텍스트 뭉치 기반 크롭으로 진행합니다.', e);
+      return locatedCanvas;
     }
 
     let src = null;
     let quad = null;
     try {
-      src = cvLib.imread(centerCanvas);
+      src = cvLib.imread(locatedCanvas);
       quad = detectEslQuad(cvLib, src);
       if (!quad) {
-        console.log('[알뜰요정 ESL 감지] 라벨 영역을 못 찾아 중앙 크롭 사진으로 진행합니다.');
-        return centerCanvas;
+        console.log('[알뜰요정 ESL 감지] 사각형 경계를 못 찾아 텍스트 뭉치 기반 크롭으로 진행합니다.');
+        return locatedCanvas;
       }
 
       const pts = cornerMatToPoints(quad);
@@ -888,14 +1012,14 @@ document.addEventListener('DOMContentLoaded', () => {
         outCanvas.width = maxWidth;
         outCanvas.height = maxHeight;
         cvLib.imshow(outCanvas, dst);
-        console.log(`[알뜰요정 ESL 감지] 라벨 영역 감지 및 보정 완료 (${maxWidth}x${maxHeight})`);
+        console.log(`[알뜰요정 ESL 감지] 최종 사각형 보정 완료 (${maxWidth}x${maxHeight})`);
         return outCanvas;
       } finally {
         srcTri.delete(); dstTri.delete(); M.delete(); dst.delete();
       }
     } catch (e) {
-      console.warn('ESL 영역 보정 중 오류가 발생해 중앙 크롭 사진으로 진행합니다.', e);
-      return centerCanvas;
+      console.warn('ESL 영역 보정 중 오류가 발생해 텍스트 뭉치 기반 크롭으로 진행합니다.', e);
+      return locatedCanvas;
     } finally {
       if (src) src.delete();
       if (quad) quad.delete();
