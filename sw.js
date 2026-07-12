@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v19'; // v18 -> v19: 화면을 "오늘 장보기" 중심으로 재편(A/B 비교는 보조기능화) + ESL 완전자동추가를 "확인 후 담기"로 전환
+const CACHE_NAME = 'alddeul-yojeong-v21'; // v19 -> v21: 계획항목(+입력)/체크리스트(정렬)/카테고리 자동분류/오늘의 영수증/월간예산 추가, 확인카드 안 닫히던 버그 재수정 포함
 const ASSETS = [
   './index.html',
   './style.css',

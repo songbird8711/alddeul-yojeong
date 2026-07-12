@@ -647,6 +647,90 @@ input[type=number]:focus, select:focus {
 }
 .list-item-remove:hover { color: var(--high-red); }
 
+/* ---- 계획 항목 입력(+) ---- */
+.planned-add-form { display: flex; gap: 6px; margin-bottom: 10px; }
+.planned-add-form input {
+  flex: 1;
+  padding: 10px;
+  font-size: 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+.planned-add-btn {
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ink);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.list-receipt-btn {
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.list-receipt-btn:hover { color: var(--ink); border-color: var(--ink); }
+
+/* ---- 리스트 항목 상단(체크박스/이름/카테고리) ---- */
+.list-item-top { display: flex; align-items: center; gap: 8px; }
+.list-item-checkbox { width: 18px; height: 18px; flex-shrink: 0; cursor: pointer; }
+.list-item-top .list-item-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.list-item-category {
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: var(--paper-alt);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 4px;
+  max-width: 88px;
+}
+
+.list-item.is-planned {
+  background: #fff;
+  border-style: dashed;
+  border-color: var(--ink-soft);
+}
+.list-item.is-planned .list-item-name { color: var(--ink-soft); }
+.list-item-planned-hint { font-size: 11px; color: var(--ink-soft); margin-top: 6px; font-style: italic; }
+.list-item.is-checked .list-item-main { margin-top: 8px; }
+
+/* ---- 영수증 / 예산 화면 ---- */
+.receipt-section { margin-bottom: 24px; padding: 16px; background: #fff; border: 1px solid var(--line); border-radius: 10px; }
+.receipt-section h2 { font-size: 15px; margin: 0 0 12px; }
+.receipt-empty { font-size: 13px; color: var(--ink-soft); text-align: center; padding: 12px 0; }
+.receipt-total { font-family: var(--font-mono); font-weight: 700; font-size: 16px; margin-bottom: 10px; }
+.receipt-cat-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+.receipt-cat-name { width: 62px; flex-shrink: 0; font-weight: 600; }
+.receipt-cat-bar-wrap { flex: 1; height: 8px; background: var(--paper-alt); border-radius: 4px; overflow: hidden; }
+.receipt-cat-bar { display: block; height: 100%; background: var(--cheap-green); }
+.receipt-cat-pct { width: 108px; flex-shrink: 0; text-align: right; font-family: var(--font-mono); color: var(--ink-soft); }
+
+.budget-form { display: flex; gap: 8px; margin-bottom: 14px; }
+.budget-form .field { flex: 1; font-size: 12px; color: var(--ink-soft); }
+.budget-form input { display: block; width: 100%; margin-top: 4px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; box-sizing: border-box; }
+.budget-form button {
+  align-self: flex-end;
+  padding: 10px 14px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--ink);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.budget-status { font-size: 13px; font-weight: 700; padding: 10px; border-radius: 8px; text-align: center; }
+.budget-status.ok { background: #EAF7EF; color: var(--cheap-green); }
+.budget-status.over { background: #FBEAEA; color: var(--high-red); }
+
 /* ---- 자동추가 되돌리기 토스트 ---- */
 .add-toast {
   position: fixed;
