@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v23'; // v22 -> v23: .hidden 클래스가 다른 클래스(display:flex)에 우선순위 밀려서 확인카드/토스트가 안 닫히던 CSS 버그 수정
+const CACHE_NAME = 'alddeul-yojeong-v24'; // v23 -> v24: ocrService TDZ 크래시 재발 방지(선언 위치 최상단화 + safeInit으로 초기화 격리)
 const ASSETS = [
   './index.html',
   './style.css',
