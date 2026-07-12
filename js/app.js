@@ -4,6 +4,14 @@
 document.addEventListener('DOMContentLoaded', () => {
   const products = ['A', 'B'];
 
+  // ocrService/ocrInitPromise를 스크립트 맨 위에서 선언한다. 예전에 이 아래쪽(사진 OCR
+  // 섹션)에 있었는데, 중간의 다른 초기화 코드가 실패하면 이 선언까지 도달하지 못해
+  // "Cannot access 'ocrService' before initialization" 크래시로 이어질 위험이 있었다.
+  // safeInit()으로 각 초기화를 독립시킨 것과 별개로, 이것 자체도 최대한 일찍 선언해서
+  // 이중으로 방어한다.
+  let ocrService = null; // 초기화된 서비스 인스턴스 재사용 (상품 A/B 둘 다 같은 서비스 공유)
+  let ocrInitPromise = null; // 동시에 두 번 초기화되지 않도록 진행 중인 초기화 프로미스를 공유
+
   // ---- [진단용] OCR 결과를 devtools 없이 화면에서 바로 보고 복사할 수 있는 오버레이 ----
   // 일반 사용자에게는 생소하고 혼란스러운 화면이라 기본적으로는 뜨지 않는다.
   // URL 뒤에 ?debug=1 을 붙여서 접속했을 때만 켜진다 (문제 재현 시 진단용).
@@ -576,12 +584,24 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  ensureExchangeRates();
-  initShoppingList();
-  initConfirmAddCard();
-  initReceiptView();
-  showListView();
-  hideConfirmAddCard(); // 시작 시 항상 닫힌 상태로 보장
+  // 초기화 함수 하나가 실패해도(예: 어떤 이유로 특정 DOM 요소를 못 찾는 경우) 나머지
+  // 초기화(특히 OCR)가 통째로 멈추는 일이 없도록, 각각 독립적으로 실행하고 실패는
+  // 콘솔에 명확히 남긴다. 이전에 이 초기화 블록 중간에서 예외가 나면 그 뒤에 있던
+  // ocrService 선언까지 도달하지 못해 "Cannot access 'ocrService' before initialization"
+  // 크래시로 이어지는 구조적 위험이 있었다 — 원인이 무엇이든 이 방식으로 원천 차단한다.
+  function safeInit(label, fn) {
+    try {
+      fn();
+    } catch (e) {
+      console.error(`[알뜰요정] "${label}" 초기화 실패 — 이 기능만 빠지고 나머지는 계속 진행합니다.`, e);
+    }
+  }
+  safeInit('환율 조회', ensureExchangeRates);
+  safeInit('오늘 장보기 리스트', initShoppingList);
+  safeInit('확인 카드', initConfirmAddCard);
+  safeInit('영수증 화면', initReceiptView);
+  safeInit('리스트 화면 전환', showListView);
+  safeInit('확인 카드 닫기', hideConfirmAddCard); // 시작 시 항상 닫힌 상태로 보장
 
   // 폰에서 "껐다 켜기"는 대부분 완전 재시작이 아니라 백그라운드에서 재개되는 것이라,
   // 뜬 채로 남아있던 확인카드/디버그오버레이가 그대로 보이는 문제가 있었다.
@@ -654,8 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ---- 사진 OCR (PaddleOCR - 한국어 전용 모델) ----
-  let ocrService = null; // 초기화된 서비스 인스턴스 재사용 (상품 A/B 둘 다 같은 서비스 공유)
-  let ocrInitPromise = null; // 동시에 두 번 초기화되지 않도록 진행 중인 초기화 프로미스를 공유
+  // ocrService/ocrInitPromise 선언은 파일 맨 위로 옮김 (TDZ 크래시 예방, 위쪽 주석 참고)
 
   async function getOcrService() {
     if (ocrService) return ocrService;
