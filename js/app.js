@@ -4,9 +4,12 @@
 document.addEventListener('DOMContentLoaded', () => {
   const products = ['A', 'B'];
 
-  // ---- [임시 진단용] OCR 결과를 devtools 없이 화면에서 바로 보고 복사할 수 있는 오버레이 ----
-  // 정확도 검증이 끝나면 이 블록과 호출부만 지우면 원상복구됩니다.
+  // ---- [진단용] OCR 결과를 devtools 없이 화면에서 바로 보고 복사할 수 있는 오버레이 ----
+  // 일반 사용자에게는 생소하고 혼란스러운 화면이라 기본적으로는 뜨지 않는다.
+  // URL 뒤에 ?debug=1 을 붙여서 접속했을 때만 켜진다 (문제 재현 시 진단용).
+  const DEBUG_MODE = new URLSearchParams(location.search).get('debug') === '1';
   function showOcrDebugOverlay(title, payload, imageCanvas) {
+    if (!DEBUG_MODE) return;
     let box = document.getElementById('ocrDebugOverlay');
     if (!box) {
       box = document.createElement('div');
@@ -119,15 +122,17 @@ document.addEventListener('DOMContentLoaded', () => {
   const resultSection = document.getElementById('result');
   const historyList = document.getElementById('historyList');
 
-  // ---- 화면 전환: 오늘 장보기(기본) <-> 상품 비교(보조 기능) ----
+  // ---- 화면 전환: 오늘 장보기(기본) <-> 상품 비교 <-> 영수증(보조 기능들) ----
   const listView = document.getElementById('listView');
   const compareView = document.getElementById('compareView');
   const compareBar = document.getElementById('compareBar');
+  const receiptView = document.getElementById('receiptView');
 
   function showListView() {
     listView.classList.remove('hidden');
     compareView.classList.add('hidden');
     compareBar.classList.add('hidden');
+    receiptView.classList.add('hidden');
   }
 
   /**
@@ -138,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     listView.classList.add('hidden');
     compareView.classList.remove('hidden');
     compareBar.classList.remove('hidden');
+    receiptView.classList.add('hidden');
     if (prefillItem) {
       applyState('A', {
         name: prefillItem.name,
@@ -154,8 +160,20 @@ document.addEventListener('DOMContentLoaded', () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
+  function showReceiptView() {
+    listView.classList.add('hidden');
+    compareView.classList.add('hidden');
+    compareBar.classList.add('hidden');
+    receiptView.classList.remove('hidden');
+    renderReceiptView();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
   document.getElementById('compareEntryBtn').addEventListener('click', () => showCompareView(null));
   document.getElementById('backToListBtn').addEventListener('click', showListView);
+  document.getElementById('receiptEntryBtn').addEventListener('click', showReceiptView);
+  document.getElementById('backFromReceiptBtn').addEventListener('click', showListView);
+
 
   // Frankfurter API가 지원하지 않아 환율 자동 조회가 불가능한 통화 (직접 입력 필요)
   const EXRATE_AUTO_UNSUPPORTED = ['VND', 'TWD'];
@@ -561,7 +579,20 @@ document.addEventListener('DOMContentLoaded', () => {
   ensureExchangeRates();
   initShoppingList();
   initConfirmAddCard();
+  initReceiptView();
   showListView();
+  hideConfirmAddCard(); // 시작 시 항상 닫힌 상태로 보장
+
+  // 폰에서 "껐다 켜기"는 대부분 완전 재시작이 아니라 백그라운드에서 재개되는 것이라,
+  // 뜬 채로 남아있던 확인카드/디버그오버레이가 그대로 보이는 문제가 있었다.
+  // 화면이 다시 보일 때마다 무조건 닫아서 항상 깨끗한 상태로 시작하게 한다.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      hideConfirmAddCard();
+      const debugBox = document.getElementById('ocrDebugOverlay');
+      if (debugBox) debugBox.remove();
+    }
+  });
 
   // ---- 입력 중 자동 임시저장 (products 영역 안의 모든 입력 변화를 위임 방식으로 감지) ----
   let draftSaveTimer = null;
@@ -913,6 +944,10 @@ document.addEventListener('DOMContentLoaded', () => {
     return '';
   }
 
+  function categoryOptionsHtml(selected) {
+    return OcrParser.CATEGORIES.map((c) => `<option value="${escapeHtml(c)}" ${c === selected ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('');
+  }
+
   function renderShoppingList() {
     const list = ShoppingListStore.getAll();
     const listEl = document.getElementById('shoppingList');
@@ -925,18 +960,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const total = ShoppingListStore.getTotal();
-    totalEl.innerHTML = `담은 상품 <b>${list.length}개</b> · 합계 <b>${krw(total)}원</b>`;
+    const boughtCount = list.filter((i) => i.checked).length;
+    totalEl.innerHTML = `담은 상품 <b>${boughtCount}개</b> · 합계 <b>${krw(total)}원</b>`;
 
-    listEl.innerHTML = list.map((item) => `
-      <li class="list-item" data-id="${item.id}">
-        <div class="list-item-main">
-          <span class="list-item-name">${item.name || '(상품명 미확인)'}</span>
-          <span class="list-item-price">${krw(item.price)}원</span>
+    // 안 산 것(체크 안 됨) 먼저, 산 것(체크 됨) 나중 — 각 그룹 안에서는 기존 순서(최신순) 유지
+    const sorted = [...list].sort((a, b) => (a.checked === b.checked ? 0 : a.checked ? 1 : -1));
+
+    listEl.innerHTML = sorted.map((item) => `
+      <li class="list-item ${item.checked ? 'is-checked' : 'is-planned'}" data-id="${item.id}">
+        <div class="list-item-top">
+          <input type="checkbox" class="list-item-checkbox" data-check-id="${item.id}" ${item.checked ? 'checked' : ''} aria-label="구매 완료 체크">
+          <span class="list-item-name">${escapeHtml(item.name || '(상품명 미확인)')}</span>
+          <select class="list-item-category" data-category-id="${item.id}">${categoryOptionsHtml(item.category)}</select>
+          <button type="button" class="list-item-remove" data-remove-id="${item.id}" aria-label="삭제">✕</button>
         </div>
-        <div class="list-item-unit">${item.unitLabel} ${krw(item.unitPriceKRW)}원</div>
-        ${renderOnlinePriceRow(item)}
-        <button type="button" class="list-item-compare" data-compare-id="${item.id}">🔍 비슷한 상품과 비교</button>
-        <button type="button" class="list-item-remove" data-remove-id="${item.id}" aria-label="삭제">✕</button>
+        ${item.checked ? `
+          <div class="list-item-main">
+            <span class="list-item-price">${krw(item.price)}원</span>
+          </div>
+          <div class="list-item-unit">${item.unitLabel} ${krw(item.unitPriceKRW)}원</div>
+          ${renderOnlinePriceRow(item)}
+          <button type="button" class="list-item-compare" data-compare-id="${item.id}">🔍 비슷한 상품과 비교</button>
+        ` : `
+          <div class="list-item-planned-hint">아직 안 담았어요 — ESL 촬영하면 자동으로 여기에 매칭돼요</div>
+        `}
       </li>
     `).join('');
 
@@ -951,6 +998,21 @@ document.addEventListener('DOMContentLoaded', () => {
       btn.addEventListener('click', () => {
         const item = ShoppingListStore.getAll().find((i) => i.id === btn.getAttribute('data-compare-id'));
         if (item) showCompareView(item);
+      });
+    });
+
+    listEl.querySelectorAll('[data-check-id]').forEach((checkbox) => {
+      checkbox.addEventListener('change', () => {
+        ShoppingListStore.toggleChecked(checkbox.getAttribute('data-check-id'));
+        renderShoppingList();
+      });
+    });
+
+    listEl.querySelectorAll('[data-category-id]').forEach((select) => {
+      select.addEventListener('change', () => {
+        ShoppingListStore.update(select.getAttribute('data-category-id'), { category: select.value });
+        // 목록 다시 그리면 select가 새로 만들어져서 방금 고른 값이 날아간 것처럼 보이니,
+        // 여기서는 정렬 순서가 안 바뀌는 조작이라 다시 그릴 필요 없음(select 값 자체가 이미 반영돼 있음).
       });
     });
   }
@@ -1108,7 +1170,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const record = ShoppingListStore.add({
+      const category = OcrParser.guessCategory(name);
+      const patch = {
         name: name || null,
         price,
         amount,
@@ -1116,8 +1179,15 @@ document.addEventListener('DOMContentLoaded', () => {
         unitLabel: calc.unitLabel,
         unitPriceKRW: calc.unitPriceKRW,
         priceKRW: price,
+        category,
+        checked: true,
+        planned: false,
         onlineStatus: name ? 'loading' : 'none',
-      });
+      };
+
+      // 이름이나 카테고리가 비슷한 "계획 항목"(아직 안 산 것)이 있으면 새로 추가하지 않고 그걸 채운다.
+      const matched = name ? ShoppingListStore.findUncheckedMatch(name, category) : null;
+      const record = matched ? ShoppingListStore.update(matched.id, patch) : ShoppingListStore.add(patch);
 
       hideConfirmAddCard();
       renderShoppingList();
@@ -1129,12 +1199,84 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // ---- 영수증(오늘 요약 + 이번 달 예산) ----
+  function renderReceiptView() {
+    const todayItems = ShoppingListStore.getAll().filter((i) => i.checked);
+    const todayTotal = todayItems.reduce((sum, i) => sum + (Number(i.priceKRW) || 0), 0);
+    const todayBox = document.getElementById('receiptToday');
+
+    if (todayItems.length === 0) {
+      todayBox.innerHTML = '<p class="receipt-empty">오늘 담은 상품이 없어요</p>';
+    } else {
+      const byCategory = {};
+      todayItems.forEach((i) => {
+        const cat = i.category || '기타';
+        byCategory[cat] = (byCategory[cat] || 0) + (Number(i.priceKRW) || 0);
+      });
+      const rows = Object.entries(byCategory)
+        .sort((a, b) => b[1] - a[1])
+        .map(([cat, amount]) => {
+          const pct = todayTotal > 0 ? Math.round((amount / todayTotal) * 100) : 0;
+          return `
+            <div class="receipt-cat-row">
+              <span class="receipt-cat-name">${escapeHtml(cat)}</span>
+              <span class="receipt-cat-bar-wrap"><span class="receipt-cat-bar" style="width:${pct}%"></span></span>
+              <span class="receipt-cat-pct">${pct}% · ${krw(amount)}원</span>
+            </div>`;
+        }).join('');
+      todayBox.innerHTML = `<div class="receipt-total">총 ${krw(todayTotal)}원 · ${todayItems.length}개</div>${rows}`;
+    }
+
+    // 이번 달 총액 = 이미 "비우기"로 보관된 것 + 오늘 아직 안 비운 체크 항목
+    const monthKey = MonthlyLogStore.currentMonthKey();
+    const archivedTotal = MonthlyLogStore.getTotalForMonth(monthKey);
+    const monthlyTotal = archivedTotal + todayTotal;
+
+    const budget = BudgetStore.get();
+    document.getElementById('budgetInput').value = budget || '';
+
+    let budgetHtml = '<p class="receipt-empty">예산을 설정하면 초과 여부를 알려드려요</p>';
+    if (budget) {
+      const diff = budget - monthlyTotal;
+      const pct = Math.round((monthlyTotal / budget) * 100);
+      budgetHtml = diff >= 0
+        ? `<div class="budget-status ok">예산 대비 ${krw(diff)}원 남음 (${pct}% 사용)</div>`
+        : `<div class="budget-status over">예산보다 ${krw(-diff)}원 초과했어요 (${pct}% 사용)</div>`;
+    }
+    document.getElementById('monthlySummary').innerHTML = `
+      <div class="receipt-total">이번 달 총 ${krw(monthlyTotal)}원</div>
+      ${budgetHtml}
+    `;
+  }
+
+  function initReceiptView() {
+    document.getElementById('budgetSaveBtn').addEventListener('click', () => {
+      const val = Number(document.getElementById('budgetInput').value);
+      if (val > 0) {
+        BudgetStore.set(val);
+        renderReceiptView();
+      }
+    });
+  }
+
   function initShoppingList() {
     renderShoppingList();
 
     const captureBtn = document.getElementById('eslCaptureBtn');
     const captureInput = document.getElementById('eslCaptureInput');
     const clearBtn = document.getElementById('listClearBtn');
+    const plannedForm = document.getElementById('plannedAddForm');
+    const plannedInput = document.getElementById('plannedAddInput');
+
+    plannedForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = plannedInput.value.trim();
+      if (!name) return;
+      const category = OcrParser.guessCategory(name);
+      ShoppingListStore.addPlanned(name, category);
+      plannedInput.value = '';
+      renderShoppingList();
+    });
 
     addCenterHintOnce(captureBtn);
     captureBtn.addEventListener('click', () => captureInput.click());
@@ -1175,7 +1317,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     clearBtn.addEventListener('click', () => {
-      ShoppingListStore.clear();
+      // "비우기" = 오늘 장보기 마무리: 체크된(=이미 산) 항목은 월간 기록에 보관하고 지우되,
+      // 아직 안 산 계획 항목은 다음 장보기를 위해 그대로 남겨둔다.
+      const checkedItems = ShoppingListStore.removeChecked();
+      if (checkedItems.length > 0) {
+        MonthlyLogStore.archive(checkedItems);
+      }
       renderShoppingList();
     });
   }

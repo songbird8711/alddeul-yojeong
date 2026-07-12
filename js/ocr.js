@@ -226,6 +226,42 @@ const OcrParser = (() => {
   }
 
   /**
+   * 상품 카테고리 자동 분류 — 상품명에 포함된 키워드로 판단한다.
+   * ESL 스캔 결과와 사용자가 직접 입력한 계획 항목("고기", "과자" 등) 둘 다에 사용된다.
+   * 완벽할 수 없으므로 사용자가 화면에서 직접 수정할 수 있게 해야 한다(UI 쪽 책임).
+   */
+  const CATEGORIES = ['신선', '과일', '육류', '수산', '유제품', '과자·음료', '생필품', '기타'];
+
+  const CATEGORY_KEYWORDS = {
+    '신선': ['채소', '야채', '상추', '배추', '무', '대파', '마늘', '양파', '감자', '고구마', '오이', '당근', '시금치', '버섯', '두부', '콩나물', '부추', '나물'],
+    '과일': ['사과', '바나나', '포도', '딸기', '수박', '참외', '귤', '오렌지', '배', '복숭아', '자두', '키위', '망고', '체리', '멜론', '과일'],
+    '육류': ['고기', '소고기', '돼지고기', '삼겹살', '목살', '불고기', '닭고기', '닭', '돈까스', '안심', '등심', '갈비', '다짐육', '한우', '스테이크', '육류', '베이컨', '햄'],
+    '수산': ['생선', '고등어', '갈치', '오징어', '새우', '조개', '김', '미역', '멸치', '참치', '연어', '굴', '낙지', '문어', '어묵', '수산'],
+    '유제품': ['우유', '치즈', '요거트', '요구르트', '버터', '생크림', '두유', '유제품'],
+    '과자·음료': ['과자', '스낵', '초콜릿', '사탕', '껌', '음료', '콜라', '사이다', '주스', '커피', '맥주', '소주', '라면', '빵', '아이스크림'],
+    '생필품': ['휴지', '세제', '샴푸', '비누', '치약', '칫솔', '물티슈', '쓰레기봉투', '세탁', '화장지', '생필품'],
+  };
+
+  // 일반 키워드 매칭보다 먼저 확인한다. 브랜드/제품명 안에 다른 카테고리 키워드가
+  // 우연히 포함된 경우를 막기 위함 (예: "새우깡"의 "새우" 때문에 수산으로 오분류되는 것 방지)
+  const CATEGORY_OVERRIDES = {
+    '과자·음료': ['새우깡', '고래밥', '꿀꽈배기', '포카칩', '조리퐁', '빼빼로', '초코파이', '오징어땅콩', '자갈치', '바나나킥'],
+  };
+
+  function guessCategory(name) {
+    if (!name) return '기타';
+    const compact = String(name).replace(/\s/g, '');
+    for (const cat of Object.keys(CATEGORY_OVERRIDES)) {
+      if (CATEGORY_OVERRIDES[cat].some((k) => compact.includes(k))) return cat;
+    }
+    for (const cat of CATEGORIES) {
+      const keywords = CATEGORY_KEYWORDS[cat];
+      if (keywords && keywords.some((k) => compact.includes(k))) return cat;
+    }
+    return '기타';
+  }
+
+  /**
    * 라벨이 ESL 디지털 태그인지, 정육점/수산 같은 구조화된 인쇄 라벨인지 힌트만 준다.
    * 파싱 로직 분기용이 아니라 "카테고리 자동 추정"(육류/수산 등) 참고용.
    */
@@ -254,6 +290,7 @@ const OcrParser = (() => {
       unit: amountInfo ? amountInfo.unit : null,
       complete: price != null && amountInfo != null, // 이름은 못 찾아도 계산 자체는 가능
       labelHint: detectLabelHint(input),
+      category: guessCategory(name),
     };
   }
 
@@ -268,5 +305,5 @@ const OcrParser = (() => {
     };
   }
 
-  return { analyze, autoExtract, extractPriceCandidates, extractAmountCandidates, guessProductName, detectLabelHint };
+  return { analyze, autoExtract, extractPriceCandidates, extractAmountCandidates, guessProductName, detectLabelHint, guessCategory, CATEGORIES };
 })();

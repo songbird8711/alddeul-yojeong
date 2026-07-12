@@ -30,7 +30,7 @@ const ShoppingListStore = (() => {
 
   /**
    * ESL에서 자동 추출된 항목을 리스트 맨 위에 추가한다.
-   * @param {Object} item { name, price, amount, unit, unitLabel, unitPriceKRW, priceKRW }
+   * @param {Object} item { name, price, amount, unit, unitLabel, unitPriceKRW, priceKRW, category, checked }
    * @returns {Object} 저장된 레코드(id, addedAt 포함) — 되돌리기(취소)에 필요
    */
   function add(item) {
@@ -38,11 +38,69 @@ const ShoppingListStore = (() => {
     const record = {
       id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       addedAt: new Date().toISOString(),
+      checked: true, // 기본값: ESL로 스캔한 건 이미 "산" 것으로 취급
+      planned: false,
+      category: '기타',
       ...item,
     };
     list.unshift(record);
     save(list);
     return record;
+  }
+
+  /**
+   * 장보기 전에 미리 적어두는 계획 항목("고기", "휴지" 등). 아직 가격/용량 없이 체크 안 된 상태로 추가된다.
+   */
+  function addPlanned(name, category) {
+    return add({
+      name,
+      category: category || '기타',
+      checked: false,
+      planned: true,
+      price: null,
+      amount: null,
+      unit: null,
+      unitLabel: null,
+      unitPriceKRW: null,
+      priceKRW: 0,
+      onlineStatus: 'none',
+    });
+  }
+
+  /**
+   * 아직 체크 안 된(=아직 안 산) 계획 항목 중에서 이 스캔 결과와 어울리는 걸 찾는다.
+   * 1순위: 이름이 서로 겹치는 경우 (예: "서울우유" 계획 + "서울우유 900ml" 스캔)
+   * 2순위: 이름은 안 겹쳐도 카테고리가 같은 경우 (예: "고기"라고만 적어둔 계획 + "한우 목살" 스캔)
+   *        — 사용자가 카테고리 단위로 대충 적어두는 경우가 많을 것으로 보고 추가한 규칙.
+   * @param {string} name 스캔된 상품명
+   * @param {string} category 스캔된 상품의 (자동추정) 카테고리
+   */
+  function findUncheckedMatch(name, category) {
+    const list = getAll();
+    const unchecked = list.filter((item) => !item.checked && item.name);
+    const compact = name ? String(name).replace(/\s/g, '') : '';
+
+    const nameMatch = unchecked.find((item) => {
+      const itemCompact = String(item.name).replace(/\s/g, '');
+      return compact && (compact.includes(itemCompact) || itemCompact.includes(compact));
+    });
+    if (nameMatch) return nameMatch;
+
+    if (category) {
+      const categoryMatch = unchecked.find((item) => item.category === category);
+      if (categoryMatch) return categoryMatch;
+    }
+
+    return null;
+  }
+
+  function toggleChecked(id) {
+    const list = getAll();
+    const idx = list.findIndex((item) => item.id === id);
+    if (idx === -1) return null;
+    list[idx] = { ...list[idx], checked: !list[idx].checked };
+    save(list);
+    return list[idx];
   }
 
   function remove(id) {
@@ -68,11 +126,125 @@ const ShoppingListStore = (() => {
     localStorage.removeItem(KEY);
   }
 
+  /**
+   * 체크된(=이미 산) 항목만 리스트에서 제거하고, 제거된 항목들을 반환한다.
+   * 아직 체크 안 된 계획 항목은 다음 장보기를 위해 그대로 남겨둔다.
+   * (호출하는 쪽에서 반환값을 MonthlyLogStore에 보관한 뒤 이 함수를 부르는 순서로 사용)
+   */
+  function removeChecked() {
+    const list = getAll();
+    const checkedItems = list.filter((item) => item.checked);
+    const remaining = list.filter((item) => !item.checked);
+    save(remaining);
+    return checkedItems;
+  }
+
   function getTotal() {
     return getAll().reduce((sum, item) => sum + (Number(item.priceKRW) || 0), 0);
   }
 
-  return { getAll, add, update, remove, clear, getTotal };
+  return { getAll, add, addPlanned, findUncheckedMatch, toggleChecked, update, remove, removeChecked, clear, getTotal };
+})();
+
+// ---- 월간 구매 기록 (영수증/예산 비교용) ----
+// "비우기"를 누르면 그 시점까지 체크된 항목들이 여기에 영구적으로(약 13개월치) 쌓인다.
+// 오늘 아직 안 비운 항목은 여기 없으므로, "이번 달 총액" 계산 시 오늘의 체크된 항목도 더해서 봐야 한다.
+const MonthlyLogStore = (() => {
+  const KEY = 'alddeul-yojeong:monthly-log';
+  const RETENTION_DAYS = 400; // 대략 13개월치 보관 (전월/전년 비교 여지를 위해 넉넉히)
+
+  function getAllRaw() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      console.error('월간 기록을 불러오지 못했습니다.', e);
+      return [];
+    }
+  }
+
+  function isWithinDays(iso, days) {
+    const t = new Date(iso).getTime();
+    if (!Number.isFinite(t)) return false;
+    return t >= Date.now() - days * 24 * 60 * 60 * 1000;
+  }
+
+  function getAll() {
+    return getAllRaw().filter((r) => isWithinDays(r.boughtAt, RETENTION_DAYS));
+  }
+
+  /**
+   * 체크된 항목들을 월간 기록에 보관한다 (ShoppingListStore.removeChecked()의 반환값을 그대로 넣으면 됨).
+   */
+  function archive(items) {
+    if (!items || items.length === 0) return;
+    const list = getAll();
+    const now = new Date().toISOString();
+    items.forEach((item) => {
+      list.unshift({
+        id: item.id,
+        name: item.name,
+        category: item.category || '기타',
+        priceKRW: Number(item.priceKRW) || 0,
+        boughtAt: item.addedAt || now, // 실제로 담았던 시각 기준 (더 정확한 "언제 샀는지")
+      });
+    });
+    try {
+      localStorage.setItem(KEY, JSON.stringify(list));
+    } catch (e) {
+      console.error('월간 기록 저장에 실패했습니다.', e);
+    }
+  }
+
+  function monthKeyOf(iso) {
+    return String(iso).slice(0, 7); // 'YYYY-MM'
+  }
+
+  function getForMonth(yyyyMM) {
+    return getAll().filter((r) => monthKeyOf(r.boughtAt) === yyyyMM);
+  }
+
+  function getTotalForMonth(yyyyMM) {
+    return getForMonth(yyyyMM).reduce((sum, r) => sum + r.priceKRW, 0);
+  }
+
+  function getCategoryBreakdownForMonth(yyyyMM) {
+    const items = getForMonth(yyyyMM);
+    const totals = {};
+    items.forEach((r) => {
+      totals[r.category] = (totals[r.category] || 0) + r.priceKRW;
+    });
+    return totals;
+  }
+
+  function currentMonthKey() {
+    return new Date().toISOString().slice(0, 7);
+  }
+
+  return { getAll, archive, getForMonth, getTotalForMonth, getCategoryBreakdownForMonth, currentMonthKey };
+})();
+
+// ---- 월간 예산 ----
+const BudgetStore = (() => {
+  const KEY = 'alddeul-yojeong:monthly-budget';
+
+  function get() {
+    const raw = localStorage.getItem(KEY);
+    const n = Number(raw);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  }
+
+  function set(amount) {
+    try {
+      localStorage.setItem(KEY, String(Math.round(Number(amount) || 0)));
+    } catch (e) {
+      console.error('예산 저장에 실패했습니다.', e);
+    }
+  }
+
+  return { get, set };
 })();
 
 const HistoryStore = (() => {
