@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v25'; // v24 -> v25: PaddleOCR 결과를 재활용한 텍스트 뭉치 클러스터링으로 ESL 위치 추정 추가(YOLO 없이)
+const CACHE_NAME = 'alddeul-yojeong-v26'; // v25 -> v26: 진단 결과 모아서 한번에 복사하는 기능 추가(?debug=1 모드)
 const ASSETS = [
   './index.html',
   './style.css',
