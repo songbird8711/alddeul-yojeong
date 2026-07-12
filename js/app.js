@@ -1107,12 +1107,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const priceInput = document.getElementById('confirmPrice');
     const amountInput = document.getElementById('confirmAmount');
     const unitSelect = document.getElementById('confirmUnit');
+    const categorySelect = document.getElementById('confirmCategory');
     const thumb = document.getElementById('confirmAddThumb');
 
     nameInput.value = extracted.name || '';
     priceInput.value = extracted.price != null ? extracted.price : '';
     amountInput.value = extracted.amount != null ? extracted.amount : '';
     unitSelect.value = extracted.unit || 'g';
+    categorySelect.innerHTML = categoryOptionsHtml(extracted.category || OcrParser.guessCategory(extracted.name));
 
     try {
       thumb.src = canvas.toDataURL('image/jpeg', 0.7);
@@ -1122,6 +1124,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     updateConfirmPreview();
+    hideCategoryMatchPrompt();
     overlay.classList.remove('hidden');
 
     // 자동추출이 못 채운 칸이 있으면 그 칸에 바로 포커스를 줘서 채우기 편하게 한다
@@ -1132,6 +1135,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function hideConfirmAddCard() {
     document.getElementById('confirmAddCard').classList.add('hidden');
+    hideCategoryMatchPrompt();
+  }
+
+  // 이름은 안 겹치지만 카테고리로만 매칭된 경우, 확정하기 전에 사용자에게 물어보기 위한 임시 저장소
+  let pendingCategoryMatch = null;
+
+  function showCategoryMatchPrompt(matchedItem, patch) {
+    pendingCategoryMatch = { matchedItem, patch };
+    document.getElementById('categoryMatchText').textContent =
+      `"${matchedItem.name}" 계획해두신 것과 같은 상품인가요?`;
+    document.getElementById('categoryMatchPrompt').classList.remove('hidden');
+    document.getElementById('confirmAddActions').classList.add('hidden');
+  }
+
+  function hideCategoryMatchPrompt() {
+    pendingCategoryMatch = null;
+    document.getElementById('categoryMatchPrompt').classList.add('hidden');
+    document.getElementById('confirmAddActions').classList.remove('hidden');
+  }
+
+  function finalizeAdd(record) {
+    hideConfirmAddCard();
+    renderShoppingList();
+    showAddToast(record);
+    if (record.name) {
+      fetchOnlinePriceForItem(record.id, record.name);
+    }
   }
 
   function initConfirmAddCard() {
@@ -1148,11 +1178,24 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('eslCaptureInput').click();
     });
 
+    document.getElementById('categoryMatchYesBtn').addEventListener('click', () => {
+      const { matchedItem, patch } = pendingCategoryMatch;
+      const record = ShoppingListStore.update(matchedItem.id, patch);
+      finalizeAdd(record);
+    });
+
+    document.getElementById('categoryMatchNoBtn').addEventListener('click', () => {
+      const { patch } = pendingCategoryMatch;
+      const record = ShoppingListStore.add(patch);
+      finalizeAdd(record);
+    });
+
     document.getElementById('confirmAddBtn').addEventListener('click', () => {
       const name = document.getElementById('confirmName').value.trim();
       const price = Number(document.getElementById('confirmPrice').value);
       const amount = Number(document.getElementById('confirmAmount').value);
       const unit = document.getElementById('confirmUnit').value;
+      const category = document.getElementById('confirmCategory').value;
       const previewEl = document.getElementById('confirmPreview');
 
       if (!price || !amount) {
@@ -1170,7 +1213,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const category = OcrParser.guessCategory(name);
       const patch = {
         name: name || null,
         price,
@@ -1185,23 +1227,33 @@ document.addEventListener('DOMContentLoaded', () => {
         onlineStatus: name ? 'loading' : 'none',
       };
 
-      // 이름이나 카테고리가 비슷한 "계획 항목"(아직 안 산 것)이 있으면 새로 추가하지 않고 그걸 채운다.
-      const matched = name ? ShoppingListStore.findUncheckedMatch(name, category) : null;
-      const record = matched ? ShoppingListStore.update(matched.id, patch) : ShoppingListStore.add(patch);
-
-      hideConfirmAddCard();
-      renderShoppingList();
-      showAddToast(record);
-
-      if (name) {
-        fetchOnlinePriceForItem(record.id, name);
+      // 1순위: 이름이 겹치는 계획 항목 -> 신뢰도 높으니 바로 확정
+      const nameMatch = name ? ShoppingListStore.findUncheckedNameMatch(name) : null;
+      if (nameMatch) {
+        finalizeAdd(ShoppingListStore.update(nameMatch.id, patch));
+        return;
       }
+
+      // 2순위: 카테고리만 겹치는 계획 항목 -> 신뢰도 낮으니 사용자에게 확인받고 진행
+      const categoryMatch = ShoppingListStore.findUncheckedCategoryMatch(category);
+      if (categoryMatch) {
+        showCategoryMatchPrompt(categoryMatch, patch);
+        return;
+      }
+
+      finalizeAdd(ShoppingListStore.add(patch));
     });
   }
 
   // ---- 영수증(오늘 요약 + 이번 달 예산) ----
   function renderReceiptView() {
-    const todayItems = ShoppingListStore.getAll().filter((i) => i.checked);
+    const now = new Date();
+    const todayStr = now.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+    const monthKey = now.toISOString().slice(0, 7); // 'YYYY-MM'
+
+    const allChecked = ShoppingListStore.getAll().filter((i) => i.checked);
+    // "오늘의 영수증"은 정확히 오늘 담은 것만 (며칠째 안 비운 항목이 섞여 들어가지 않도록)
+    const todayItems = allChecked.filter((i) => String(i.addedAt).slice(0, 10) === todayStr);
     const todayTotal = todayItems.reduce((sum, i) => sum + (Number(i.priceKRW) || 0), 0);
     const todayBox = document.getElementById('receiptToday');
 
@@ -1227,10 +1279,14 @@ document.addEventListener('DOMContentLoaded', () => {
       todayBox.innerHTML = `<div class="receipt-total">총 ${krw(todayTotal)}원 · ${todayItems.length}개</div>${rows}`;
     }
 
-    // 이번 달 총액 = 이미 "비우기"로 보관된 것 + 오늘 아직 안 비운 체크 항목
-    const monthKey = MonthlyLogStore.currentMonthKey();
+    // 이번 달 총액 = 이미 "장보기 완료"로 보관된 것(월간로그) + 아직 안 비웠지만 이번 달에 담긴 체크 항목 전부.
+    // (예전엔 "지금 체크된 전부"를 오늘 것처럼 더해서, 며칠째 안 비우면 지난달 항목이 이번달 총액에
+    //  잘못 섞여 들어가는 문제가 있었음 — addedAt이 실제로 이번 달인 것만 더하도록 수정)
+    const uncheckedArchiveThisMonth = allChecked
+      .filter((i) => String(i.addedAt).slice(0, 7) === monthKey)
+      .reduce((sum, i) => sum + (Number(i.priceKRW) || 0), 0);
     const archivedTotal = MonthlyLogStore.getTotalForMonth(monthKey);
-    const monthlyTotal = archivedTotal + todayTotal;
+    const monthlyTotal = archivedTotal + uncheckedArchiveThisMonth;
 
     const budget = BudgetStore.get();
     document.getElementById('budgetInput').value = budget || '';
@@ -1317,12 +1373,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     clearBtn.addEventListener('click', () => {
-      // "비우기" = 오늘 장보기 마무리: 체크된(=이미 산) 항목은 월간 기록에 보관하고 지우되,
+      // "장보기 완료" = 체크된(=이미 산) 항목은 월간 기록에 보관하고 지우되,
       // 아직 안 산 계획 항목은 다음 장보기를 위해 그대로 남겨둔다.
       const checkedItems = ShoppingListStore.removeChecked();
       if (checkedItems.length > 0) {
         MonthlyLogStore.archive(checkedItems);
       }
+      renderShoppingList();
+    });
+
+    const clearAllBtn = document.getElementById('listClearAllBtn');
+    clearAllBtn.addEventListener('click', () => {
+      // "전체 비우기"는 계획 항목까지 포함해서 진짜로 다 지우는 파괴적인 동작이라 한 번 확인받는다.
+      // (월간 기록에는 보관하지 않음 — "안 산 걸 취소"하는 의미이지 "샀다"는 뜻이 아니므로)
+      const confirmed = window.confirm('오늘 장보기 목록을 전부 지울까요? (아직 안 산 계획 항목도 함께 지워집니다)');
+      if (!confirmed) return;
+      ShoppingListStore.clear();
       renderShoppingList();
     });
   }

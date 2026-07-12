@@ -75,23 +75,30 @@ const ShoppingListStore = (() => {
    * @param {string} name 스캔된 상품명
    * @param {string} category 스캔된 상품의 (자동추정) 카테고리
    */
-  function findUncheckedMatch(name, category) {
+  /**
+   * 이름이 서로 겹치는 계획 항목을 찾는다 (예: "서울우유" 계획 + "서울우유 900ml" 스캔).
+   * 이 매칭은 신뢰도가 높아서 자동으로 확정해도 안전하다.
+   */
+  function findUncheckedNameMatch(name) {
+    if (!name) return null;
+    const compact = String(name).replace(/\s/g, '');
     const list = getAll();
-    const unchecked = list.filter((item) => !item.checked && item.name);
-    const compact = name ? String(name).replace(/\s/g, '') : '';
-
-    const nameMatch = unchecked.find((item) => {
+    return list.find((item) => {
+      if (item.checked || !item.name) return false;
       const itemCompact = String(item.name).replace(/\s/g, '');
-      return compact && (compact.includes(itemCompact) || itemCompact.includes(compact));
-    });
-    if (nameMatch) return nameMatch;
+      return compact.includes(itemCompact) || itemCompact.includes(compact);
+    }) || null;
+  }
 
-    if (category) {
-      const categoryMatch = unchecked.find((item) => item.category === category);
-      if (categoryMatch) return categoryMatch;
-    }
-
-    return null;
+  /**
+   * 이름은 안 겹치지만 카테고리가 같은 계획 항목을 찾는다 (예: "고기" 계획 + "한우 목살" 스캔).
+   * 이 매칭은 신뢰도가 낮다 — 같은 카테고리 계획이 여러 개면 엉뚱한 걸 고를 수 있으므로
+   * 호출하는 쪽(화면)에서 반드시 사용자에게 "이거 맞아요?" 확인을 받은 뒤에 사용해야 한다.
+   */
+  function findUncheckedCategoryMatch(category) {
+    if (!category) return null;
+    const list = getAll();
+    return list.find((item) => !item.checked && item.name && item.category === category) || null;
   }
 
   function toggleChecked(id) {
@@ -143,7 +150,7 @@ const ShoppingListStore = (() => {
     return getAll().reduce((sum, item) => sum + (Number(item.priceKRW) || 0), 0);
   }
 
-  return { getAll, add, addPlanned, findUncheckedMatch, toggleChecked, update, remove, removeChecked, clear, getTotal };
+  return { getAll, add, addPlanned, findUncheckedNameMatch, findUncheckedCategoryMatch, toggleChecked, update, remove, removeChecked, clear, getTotal };
 })();
 
 // ---- 월간 구매 기록 (영수증/예산 비교용) ----
