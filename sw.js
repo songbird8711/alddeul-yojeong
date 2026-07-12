@@ -1,4 +1,4 @@
-const CACHE_NAME = 'alddeul-yojeong-v22'; // v21 -> v22: 카테고리매칭 오확정 방지(확인 프롬프트 추가), 월간총액 날짜경계 버그 수정, 비우기 버튼 분리(장보기완료/전체비우기)
+const CACHE_NAME = 'alddeul-yojeong-v23'; // v22 -> v23: .hidden 클래스가 다른 클래스(display:flex)에 우선순위 밀려서 확인카드/토스트가 안 닫히던 CSS 버그 수정
 const ASSETS = [
   './index.html',
   './style.css',

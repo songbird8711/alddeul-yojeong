@@ -176,7 +176,10 @@ input[type=number]:focus, select:focus {
 .stamp-button:hover { background: #000; }
 .stamp-button:active { transform: translateY(1px); }
 
-.hidden { display: none; }
+/* !important: "hidden" 클래스는 다른 어떤 클래스의 display 설정보다도 항상 이겨야 한다.
+   예전엔 .hidden이 CSS 파일 앞쪽에 있어서, 뒤에 나온 .confirm-add-overlay/.add-toast 같은
+   display:flex 클래스한테 우선순위에서 밀려 "hidden을 줘도 안 숨겨지는" 버그가 있었다. */
+.hidden { display: none !important; }
 
 .receipt {
   background: #fff;
